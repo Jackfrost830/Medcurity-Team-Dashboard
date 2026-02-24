@@ -72,10 +72,8 @@
     "sql": {
       "report_id": "00ORO000002i21m2AA",
       "aggregation": "count",
-      "date_keys": [
-        "Created Date"
-      ],
-      "series_mode": "cumulative"
+      "window_mode": "current_snapshot",
+      "series_mode": "snapshot"
     },
     "mql": {
       "report_ids": [
