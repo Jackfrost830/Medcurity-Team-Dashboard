@@ -94,7 +94,7 @@
     };
     const DEFAULT_GOALS = {"new_sales": {"quarter_goal": 36000, "month_goals": [null, null, null]}, "total_active_pipeline": {"quarter_goal": 800000, "month_goals": [800000, 800000, 800000]}, "new_customers": {"quarter_goal": 24, "month_goals": [null, null, null]}, "arr": {"quarter_goal": 1100000, "month_goals": [null, null, null]}, "sql": {"quarter_goal": 15, "month_goals": [null, null, null]}, "mql": {"quarter_goal": 75, "month_goals": [null, null, null]}, "renewals_number": {"quarter_goal": 150000, "month_goals": [null, null, null]}, "nrr_customer_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "nrr_dollar_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "qtd_billing_progress": {"quarter_goal": 350000, "month_goals": [null, null, null]}};
     const CURRENT_QUARTER = "Q1-2026";
-    const HISTORY_DATA = [{"quarter": "Q1-2026", "quarter_anchor_date": "2026-02-23", "snapshot_date": "2026-02-24", "week_start": "2026-02-23", "generated_at_utc": "2026-02-24 07:04 UTC", "metrics": {"arr": 1053498.40088, "nrr_customer_pct": 0.8913043478260869, "nrr_dollar_pct": 0.9437845373561741, "renewals_number": 141061.24998999998, "new_sales": 17883.0, "total_active_pipeline": 629896.9801506, "new_customers": 8.0, "lost_customers": 0.0, "sql": 11.0, "mql": 92.0, "services_active_projects": 29.0, "services_closed_projects_this_quarter": 1.0, "services_avg_project_close_days_this_quarter": 51.59615384615385}}];
+    const HISTORY_DATA = [{"quarter": "Q1-2026", "quarter_anchor_date": "2026-02-23", "snapshot_date": "2026-02-24", "week_start": "2026-02-23", "generated_at_utc": "2026-02-24 07:18 UTC", "metrics": {"arr": 1053498.40088, "nrr_customer_pct": 0.8913043478260869, "nrr_dollar_pct": 0.9437845373561741, "renewals_number": 141061.24998999998, "new_sales": 17883.0, "total_active_pipeline": 629896.9801506, "new_customers": 8.0, "lost_customers": 0.0, "sql": 11.0, "mql": 92.0, "services_active_projects": 29.0, "services_closed_projects_this_quarter": 1.0, "services_avg_project_close_days_this_quarter": 51.59615384615385}}];
     const GOALS_BY_QUARTER_KEY = 'dashboard_goals_by_quarter_v1';
     const GOALS_LOCK_BY_QUARTER_KEY = 'dashboard_goals_lock_by_quarter_v1';
     let goalsEditEnabled = false;
@@ -120,32 +120,30 @@
       if (metricKey === 'total_active_pipeline') {
         return { quarter_goal: 800000, month_goals: [800000, 800000, 800000] };
       }
+      if (metricKey === 'nrr_customer_pct' || metricKey === 'nrr_dollar_pct') {
+        const srcPct = raw && typeof raw === 'object' ? raw : fallback;
+        let q = Number(srcPct?.quarter_goal ?? fallback.quarter_goal ?? 90);
+        if (q <= 1) q = q * 100;
+        return { quarter_goal: q, month_goals: [q, q, q] };
+      }
       if (Array.isArray(raw)) {
-        const monthly = raw.map(x => Number(x || 0));
-        return { quarter_goal: monthly.reduce((a,b)=>a+b,0), month_goals: [null, null, null], month_splits: monthly };
+        const goals = raw.map(x => Number(x || 0));
+        return { quarter_goal: Number(goals[2] || 0), month_goals: goals };
       }
       const src = raw && typeof raw === 'object' ? raw : fallback;
-      const month_goals = (src?.month_goals || src?.splits || fallback.month_goals || [null, null, null]).map(v => {
+      let month_goals = (src?.month_goals || src?.splits || fallback.month_goals || [null, null, null]).map(v => {
         if (v === null || v === undefined || v === '') return null;
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
       });
-      let month_splits = (src?.month_splits || [null, null, null]).map(v => {
-        if (v === null || v === undefined || v === '') return null;
-        const n = Number(v);
-        return Number.isFinite(n) ? n : null;
-      });
-      if ((month_splits[0] === null && month_splits[1] === null && month_splits[2] === null)
-          && (month_goals[0] !== null || month_goals[1] !== null || month_goals[2] !== null)) {
-        const c0 = Number(month_goals[0] || 0);
-        const c1 = Number(month_goals[1] || c0);
-        const c2 = Number(month_goals[2] || 0);
-        month_splits = [c0, Math.max(c1 - c0, 0), Math.max(c2 - c1, 0)];
+      if ((month_goals[0] === null && month_goals[1] === null && month_goals[2] === null)
+          && Array.isArray(src?.month_splits)) {
+        const s = src.month_splits.map(v => Number(v || 0));
+        month_goals = [s[0], s[0] + s[1], s[0] + s[1] + s[2]];
       }
       return {
         quarter_goal: Number(src?.quarter_goal ?? fallback.quarter_goal ?? 0),
-        month_goals,
-        month_splits
+        month_goals
       };
     }
 
@@ -227,9 +225,12 @@
       if (resetBtn) resetBtn.disabled = !goalsEditEnabled;
       document.querySelectorAll('#form input[data-k]').forEach(inp => {
         const k = inp.getAttribute('data-k');
+        const f = inp.getAttribute('data-f');
         const isPipeline = k === 'total_active_pipeline';
-        inp.disabled = !goalsEditEnabled || isPipeline;
-        if (isPipeline) inp.readOnly = true;
+        const isNrr = k === 'nrr_customer_pct' || k === 'nrr_dollar_pct';
+        const lockMonth = isPipeline || (isNrr && f === 'month_goal');
+        inp.disabled = !goalsEditEnabled || lockMonth;
+        if (lockMonth) inp.readOnly = true;
       });
     }
 
@@ -273,20 +274,26 @@
       form.innerHTML = Object.keys(LABELS).map(key => {
         const g = goals[key] || DEFAULT_GOALS[key];
         const locked = key === 'total_active_pipeline';
-        let m0 = g.month_splits?.[0];
-        let m1 = g.month_splits?.[1];
-        let m2 = g.month_splits?.[2];
+        const isNrr = key === 'nrr_customer_pct' || key === 'nrr_dollar_pct';
+        const qDisplay = isNrr ? (Number(g.quarter_goal || 0) <= 1 ? Number(g.quarter_goal || 0) * 100 : Number(g.quarter_goal || 0)) : Number(g.quarter_goal || 0);
+        let m0 = g.month_goals?.[0];
+        let m1 = g.month_goals?.[1];
+        let m2 = g.month_goals?.[2];
+        if (isNrr) {
+          const q = Number(g.quarter_goal || 90);
+          const goal = q <= 1 ? q * 100 : q;
+          m0 = goal; m1 = goal; m2 = goal;
+        }
         if ((m0 === null || m0 === undefined) && (m1 === null || m1 === undefined) && (m2 === null || m2 === undefined)) {
           const qGoal = Number(g.quarter_goal || 0);
           if (qGoal > 0) {
-            const each = qGoal / 3;
-            m0 = each; m1 = each; m2 = each;
+            m0 = qGoal / 3; m1 = (qGoal * 2) / 3; m2 = qGoal;
           }
         }
         const ro = locked ? 'readonly' : '';
         return `<div class="row">`
           + `<div><strong>${LABELS[key]}</strong></div>`
-          + `<input data-k="${key}" data-f="quarter_goal" value="${g.quarter_goal}" ${ro} />`
+          + `<input data-k="${key}" data-f="quarter_goal" value="${qDisplay}" ${ro} />`
           + `<input data-k="${key}" data-f="month_goal" data-i="0" value="${m0 === null || m0 === undefined ? '' : m0}" ${ro} />`
           + `<input data-k="${key}" data-f="month_goal" data-i="1" value="${m1 === null || m1 === undefined ? '' : m1}" ${ro} />`
           + `<input data-k="${key}" data-f="month_goal" data-i="2" value="${m2 === null || m2 === undefined ? '' : m2}" ${ro} />`
@@ -295,14 +302,23 @@
 
       const applyEvenSplit = (goalInput) => {
         const key = goalInput.getAttribute('data-k');
+        if (key === 'nrr_customer_pct' || key === 'nrr_dollar_pct') {
+          const qGoal = Number(goalInput.value || 0);
+          if (!Number.isFinite(qGoal)) return;
+          const nrrGoal = qGoal <= 1 ? qGoal * 100 : qGoal;
+          const inputs = Array.from(document.querySelectorAll(`input[data-k="${key}"][data-f="month_goal"]`));
+          if (inputs.length !== 3) return;
+          inputs.forEach(inp => inp.value = nrrGoal ? String(Math.round(nrrGoal * 100) / 100) : '');
+          return;
+        }
         const qGoal = Number(goalInput.value || 0);
         if (!Number.isFinite(qGoal)) return;
         const inputs = Array.from(document.querySelectorAll(`input[data-k="${key}"][data-f="month_goal"]`));
         if (inputs.length !== 3) return;
         const allBlank = inputs.every(inp => String(inp.value || '').trim() === '');
         if (!allBlank) return;
-        const each = qGoal / 3;
-        inputs.forEach(inp => inp.value = each ? String(Math.round(each * 100) / 100) : '');
+        const vals = [qGoal / 3, (qGoal * 2) / 3, qGoal].map(v => Math.round(v * 100) / 100);
+        inputs.forEach((inp, idx) => inp.value = vals[idx] ? String(vals[idx]) : '');
       };
       document.querySelectorAll('input[data-f="quarter_goal"]').forEach(inp => {
         inp.addEventListener('change', () => applyEvenSplit(inp));
@@ -396,17 +412,26 @@
         const k = inp.getAttribute('data-k');
         if (!goals[k]) goals[k] = { quarter_goal: 0, month_goals: [null, null, null] };
         if (k === 'total_active_pipeline') {
-          goals[k] = { quarter_goal: 800000, month_goals: [800000, 800000, 800000], month_splits: [800000, 800000, 800000] };
+          goals[k] = { quarter_goal: 800000, month_goals: [800000, 800000, 800000] };
           return;
         }
         const f = inp.getAttribute('data-f');
         if (f === 'quarter_goal') {
           goals[k].quarter_goal = Number(inp.value || 0);
+          if (k === 'nrr_customer_pct' || k === 'nrr_dollar_pct') {
+            const q = Number(goals[k].quarter_goal || 0);
+            goals[k].month_goals = [q, q, q];
+          }
         } else {
           const i = Number(inp.getAttribute('data-i'));
           const raw = inp.value;
-          if (!Array.isArray(goals[k].month_splits)) goals[k].month_splits = [null, null, null];
-          goals[k].month_splits[i] = raw === '' ? null : Number(raw || 0);
+          if (!Array.isArray(goals[k].month_goals)) goals[k].month_goals = [null, null, null];
+          if (k === 'nrr_customer_pct' || k === 'nrr_dollar_pct') {
+            const q = Number(goals[k].quarter_goal || 0);
+            goals[k].month_goals = [q, q, q];
+          } else {
+            goals[k].month_goals[i] = raw === '' ? null : Number(raw || 0);
+          }
         }
       });
       saveQuarterGoals(goalQuarter.value, goals);
