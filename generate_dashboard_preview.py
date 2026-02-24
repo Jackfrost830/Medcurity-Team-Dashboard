@@ -1281,6 +1281,7 @@ def main() -> None:
     .controls {{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }}
     .controls label {{ font-size:12px; color:#5f7190; }}
     .controls select {{ padding:8px; border:1px solid #c8d8ee; border-radius:8px; background:#fff; }}
+    .lock-pill {{ padding:6px 10px; border-radius:999px; font-size:11px; border:1px solid #d8e4f3; background:#f8fbff; color:#5f7190; }}
     .row {{ display:grid; grid-template-columns: 220px 170px 1fr 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }}
     input {{ padding:8px; border:1px solid #c8d8ee; border-radius:8px; width:100%; }}
     .btns {{ display:flex; gap:8px; margin-top:8px; }}
@@ -1310,6 +1311,8 @@ def main() -> None:
       <div class=\"controls\">
         <label for=\"goal-quarter\">Goal Quarter</label>
         <select id=\"goal-quarter\"></select>
+        <span class=\"lock-pill\" id=\"goal-lock-state\"></span>
+        <button id=\"edit-toggle\" type=\"button\">Enable Edit</button>
       </div>
       <div class=\"card\">
         <div class=\"head\">
@@ -1359,6 +1362,8 @@ def main() -> None:
     const CURRENT_QUARTER = {js(current_q_label)};
     const HISTORY_DATA = {js(history_data)};
     const GOALS_BY_QUARTER_KEY = 'dashboard_goals_by_quarter_v1';
+    const GOALS_LOCK_BY_QUARTER_KEY = 'dashboard_goals_lock_by_quarter_v1';
+    let goalsEditEnabled = false;
 
     function money(v) {{ return '$' + Number(v || 0).toLocaleString(undefined, {{maximumFractionDigits:0}}); }}
     function num(v) {{ return Number(v || 0).toLocaleString(undefined, {{maximumFractionDigits:0}}); }}
@@ -1451,6 +1456,49 @@ def main() -> None:
       localStorage.setItem('dashboard_goals_v2', JSON.stringify(goals));
     }}
 
+    function loadLockStore() {{
+      try {{
+        const raw = localStorage.getItem(GOALS_LOCK_BY_QUARTER_KEY);
+        if (!raw) return {{}};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {{}};
+      }} catch (e) {{
+        return {{}};
+      }}
+    }}
+
+    function setQuarterLocked(quarter, locked) {{
+      const store = loadLockStore();
+      store[quarter] = !!locked;
+      localStorage.setItem(GOALS_LOCK_BY_QUARTER_KEY, JSON.stringify(store));
+    }}
+
+    function isQuarterLocked(quarter) {{
+      const locks = loadLockStore();
+      if (Object.prototype.hasOwnProperty.call(locks, quarter)) return !!locks[quarter];
+      const goalStore = loadGoalStore();
+      return !!goalStore[quarter];
+    }}
+
+    function applyEditState() {{
+      const quarter = document.getElementById('goal-quarter').value || CURRENT_QUARTER;
+      const locked = isQuarterLocked(quarter);
+      const editBtn = document.getElementById('edit-toggle');
+      const lockState = document.getElementById('goal-lock-state');
+      const saveBtn = document.getElementById('save');
+      const resetBtn = document.getElementById('reset');
+      if (lockState) lockState.textContent = locked && !goalsEditEnabled ? 'Locked' : 'Editing Enabled';
+      if (editBtn) editBtn.textContent = goalsEditEnabled ? 'Lock Quarter' : 'Enable Edit';
+      if (saveBtn) saveBtn.disabled = !goalsEditEnabled;
+      if (resetBtn) resetBtn.disabled = !goalsEditEnabled;
+      document.querySelectorAll('#form input[data-k]').forEach(inp => {{
+        const k = inp.getAttribute('data-k');
+        const isPipeline = k === 'total_active_pipeline';
+        inp.disabled = !goalsEditEnabled || isPipeline;
+        if (isPipeline) inp.readOnly = true;
+      }});
+    }}
+
     function availableQuarters() {{
       const set = new Set([CURRENT_QUARTER]);
       HISTORY_DATA.forEach(row => {{ if (row && row.quarter) set.add(String(row.quarter)); }});
@@ -1481,6 +1529,7 @@ def main() -> None:
     function renderGoals() {{
       const qSel = document.getElementById('goal-quarter');
       const quarter = qSel.value || CURRENT_QUARTER;
+      goalsEditEnabled = !isQuarterLocked(quarter);
       const goals = getQuarterGoals(quarter);
       const months = quarterMonths(quarter);
       document.getElementById('m1h').textContent = months[0] + ' Goal';
@@ -1524,6 +1573,7 @@ def main() -> None:
       document.querySelectorAll('input[data-f=\"quarter_goal\"]').forEach(inp => {{
         inp.addEventListener('change', () => applyEvenSplit(inp));
       }});
+      applyEditState();
     }}
 
     function fmtDelta(curr, prev, kind) {{
@@ -1588,8 +1638,25 @@ def main() -> None:
 
     goalQuarter.onchange = renderGoals;
     histQuarter.onchange = renderHistory;
+    const editToggle = document.getElementById('edit-toggle');
+    if (editToggle) {{
+      editToggle.onclick = () => {{
+        const quarter = goalQuarter.value || CURRENT_QUARTER;
+        if (goalsEditEnabled) {{
+          goalsEditEnabled = false;
+          setQuarterLocked(quarter, true);
+        }} else {{
+          goalsEditEnabled = true;
+        }}
+        applyEditState();
+      }};
+    }}
 
     document.getElementById('save').onclick = () => {{
+      if (!goalsEditEnabled) {{
+        alert('Quarter goals are locked. Click Enable Edit first.');
+        return;
+      }}
       const goals = getQuarterGoals(goalQuarter.value);
       document.querySelectorAll('input[data-k]').forEach(inp => {{
         const k = inp.getAttribute('data-k');
@@ -1609,10 +1676,17 @@ def main() -> None:
         }}
       }});
       saveQuarterGoals(goalQuarter.value, goals);
+      setQuarterLocked(goalQuarter.value, true);
+      goalsEditEnabled = false;
+      applyEditState();
       alert('Goals saved for ' + goalQuarter.value + '.');
     }};
 
     document.getElementById('reset').onclick = () => {{
+      if (!goalsEditEnabled) {{
+        alert('Quarter goals are locked. Click Enable Edit first.');
+        return;
+      }}
       saveQuarterGoals(goalQuarter.value, defaultGoals());
       renderGoals();
     }};

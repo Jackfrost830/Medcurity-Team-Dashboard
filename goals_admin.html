@@ -15,6 +15,7 @@
     .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
     .controls label { font-size:12px; color:#5f7190; }
     .controls select { padding:8px; border:1px solid #c8d8ee; border-radius:8px; background:#fff; }
+    .lock-pill { padding:6px 10px; border-radius:999px; font-size:11px; border:1px solid #d8e4f3; background:#f8fbff; color:#5f7190; }
     .row { display:grid; grid-template-columns: 220px 170px 1fr 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }
     input { padding:8px; border:1px solid #c8d8ee; border-radius:8px; width:100%; }
     .btns { display:flex; gap:8px; margin-top:8px; }
@@ -44,6 +45,8 @@
       <div class="controls">
         <label for="goal-quarter">Goal Quarter</label>
         <select id="goal-quarter"></select>
+        <span class="lock-pill" id="goal-lock-state"></span>
+        <button id="edit-toggle" type="button">Enable Edit</button>
       </div>
       <div class="card">
         <div class="head">
@@ -91,8 +94,10 @@
     };
     const DEFAULT_GOALS = {"new_sales": {"quarter_goal": 36000, "month_goals": [null, null, null]}, "total_active_pipeline": {"quarter_goal": 800000, "month_goals": [800000, 800000, 800000]}, "new_customers": {"quarter_goal": 24, "month_goals": [null, null, null]}, "arr": {"quarter_goal": 1100000, "month_goals": [null, null, null]}, "sql": {"quarter_goal": 15, "month_goals": [null, null, null]}, "mql": {"quarter_goal": 75, "month_goals": [null, null, null]}, "renewals_number": {"quarter_goal": 150000, "month_goals": [null, null, null]}, "nrr_customer_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "nrr_dollar_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "qtd_billing_progress": {"quarter_goal": 350000, "month_goals": [null, null, null]}};
     const CURRENT_QUARTER = "Q1-2026";
-    const HISTORY_DATA = [{"quarter": "Q1-2026", "quarter_anchor_date": "2026-02-23", "snapshot_date": "2026-02-24", "week_start": "2026-02-23", "generated_at_utc": "2026-02-24 07:02 UTC", "metrics": {"arr": 1053498.40088, "nrr_customer_pct": 0.8913043478260869, "nrr_dollar_pct": 0.9437845373561741, "renewals_number": 141061.24998999998, "new_sales": 17883.0, "total_active_pipeline": 629896.9801506, "new_customers": 8.0, "lost_customers": 0.0, "sql": 11.0, "mql": 92.0, "services_active_projects": 29.0, "services_closed_projects_this_quarter": 1.0, "services_avg_project_close_days_this_quarter": 51.59615384615385}}];
+    const HISTORY_DATA = [{"quarter": "Q1-2026", "quarter_anchor_date": "2026-02-23", "snapshot_date": "2026-02-24", "week_start": "2026-02-23", "generated_at_utc": "2026-02-24 07:04 UTC", "metrics": {"arr": 1053498.40088, "nrr_customer_pct": 0.8913043478260869, "nrr_dollar_pct": 0.9437845373561741, "renewals_number": 141061.24998999998, "new_sales": 17883.0, "total_active_pipeline": 629896.9801506, "new_customers": 8.0, "lost_customers": 0.0, "sql": 11.0, "mql": 92.0, "services_active_projects": 29.0, "services_closed_projects_this_quarter": 1.0, "services_avg_project_close_days_this_quarter": 51.59615384615385}}];
     const GOALS_BY_QUARTER_KEY = 'dashboard_goals_by_quarter_v1';
+    const GOALS_LOCK_BY_QUARTER_KEY = 'dashboard_goals_lock_by_quarter_v1';
+    let goalsEditEnabled = false;
 
     function money(v) { return '$' + Number(v || 0).toLocaleString(undefined, {maximumFractionDigits:0}); }
     function num(v) { return Number(v || 0).toLocaleString(undefined, {maximumFractionDigits:0}); }
@@ -185,6 +190,49 @@
       localStorage.setItem('dashboard_goals_v2', JSON.stringify(goals));
     }
 
+    function loadLockStore() {
+      try {
+        const raw = localStorage.getItem(GOALS_LOCK_BY_QUARTER_KEY);
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function setQuarterLocked(quarter, locked) {
+      const store = loadLockStore();
+      store[quarter] = !!locked;
+      localStorage.setItem(GOALS_LOCK_BY_QUARTER_KEY, JSON.stringify(store));
+    }
+
+    function isQuarterLocked(quarter) {
+      const locks = loadLockStore();
+      if (Object.prototype.hasOwnProperty.call(locks, quarter)) return !!locks[quarter];
+      const goalStore = loadGoalStore();
+      return !!goalStore[quarter];
+    }
+
+    function applyEditState() {
+      const quarter = document.getElementById('goal-quarter').value || CURRENT_QUARTER;
+      const locked = isQuarterLocked(quarter);
+      const editBtn = document.getElementById('edit-toggle');
+      const lockState = document.getElementById('goal-lock-state');
+      const saveBtn = document.getElementById('save');
+      const resetBtn = document.getElementById('reset');
+      if (lockState) lockState.textContent = locked && !goalsEditEnabled ? 'Locked' : 'Editing Enabled';
+      if (editBtn) editBtn.textContent = goalsEditEnabled ? 'Lock Quarter' : 'Enable Edit';
+      if (saveBtn) saveBtn.disabled = !goalsEditEnabled;
+      if (resetBtn) resetBtn.disabled = !goalsEditEnabled;
+      document.querySelectorAll('#form input[data-k]').forEach(inp => {
+        const k = inp.getAttribute('data-k');
+        const isPipeline = k === 'total_active_pipeline';
+        inp.disabled = !goalsEditEnabled || isPipeline;
+        if (isPipeline) inp.readOnly = true;
+      });
+    }
+
     function availableQuarters() {
       const set = new Set([CURRENT_QUARTER]);
       HISTORY_DATA.forEach(row => { if (row && row.quarter) set.add(String(row.quarter)); });
@@ -215,6 +263,7 @@
     function renderGoals() {
       const qSel = document.getElementById('goal-quarter');
       const quarter = qSel.value || CURRENT_QUARTER;
+      goalsEditEnabled = !isQuarterLocked(quarter);
       const goals = getQuarterGoals(quarter);
       const months = quarterMonths(quarter);
       document.getElementById('m1h').textContent = months[0] + ' Goal';
@@ -258,6 +307,7 @@
       document.querySelectorAll('input[data-f="quarter_goal"]').forEach(inp => {
         inp.addEventListener('change', () => applyEvenSplit(inp));
       });
+      applyEditState();
     }
 
     function fmtDelta(curr, prev, kind) {
@@ -322,8 +372,25 @@
 
     goalQuarter.onchange = renderGoals;
     histQuarter.onchange = renderHistory;
+    const editToggle = document.getElementById('edit-toggle');
+    if (editToggle) {
+      editToggle.onclick = () => {
+        const quarter = goalQuarter.value || CURRENT_QUARTER;
+        if (goalsEditEnabled) {
+          goalsEditEnabled = false;
+          setQuarterLocked(quarter, true);
+        } else {
+          goalsEditEnabled = true;
+        }
+        applyEditState();
+      };
+    }
 
     document.getElementById('save').onclick = () => {
+      if (!goalsEditEnabled) {
+        alert('Quarter goals are locked. Click Enable Edit first.');
+        return;
+      }
       const goals = getQuarterGoals(goalQuarter.value);
       document.querySelectorAll('input[data-k]').forEach(inp => {
         const k = inp.getAttribute('data-k');
@@ -343,10 +410,17 @@
         }
       });
       saveQuarterGoals(goalQuarter.value, goals);
+      setQuarterLocked(goalQuarter.value, true);
+      goalsEditEnabled = false;
+      applyEditState();
       alert('Goals saved for ' + goalQuarter.value + '.');
     };
 
     document.getElementById('reset').onclick = () => {
+      if (!goalsEditEnabled) {
+        alert('Quarter goals are locked. Click Enable Edit first.');
+        return;
+      }
       saveQuarterGoals(goalQuarter.value, defaultGoals());
       renderGoals();
     };
