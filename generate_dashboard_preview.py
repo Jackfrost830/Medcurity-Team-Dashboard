@@ -1348,6 +1348,7 @@ def main() -> None:
       new_sales:'New Sales',
       total_active_pipeline:'Total Active Pipeline',
       new_customers:'New Customers',
+      arr:'ARR',
       sql:'SQL',
       mql:'MQL',
       renewals_number:'Renewals',
