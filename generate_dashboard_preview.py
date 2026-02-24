@@ -101,7 +101,19 @@ def main() -> None:
     .wrap {{ max-width:1760px; margin:16px auto; padding:0 20px 22px; }}
     .top {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }}
     h1 {{ margin:0; font-size:34px; letter-spacing:.01em; }}
-    .stamp {{ text-align:right; color:var(--muted); font-size:12px; line-height:1.35; }}
+    .stamp {{
+      text-align:right;
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.25;
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:6px 10px;
+      background:var(--cardSoft);
+      min-width:320px;
+    }}
+    .stamp-main {{ color:var(--ink); font-weight:700; font-size:12px; }}
+    .stamp-sub {{ margin-top:2px; font-size:11px; }}
     .actions {{ display:flex; gap:8px; }}
     .actions a, .actions button {{ color:var(--ink); text-decoration:none; font-weight:700; border:1px solid var(--line); padding:7px 10px; border-radius:8px; background:var(--card); cursor:pointer; }}
     .sections {{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start; }}
@@ -184,8 +196,8 @@ def main() -> None:
     <div class=\"top\">
       <h1>Team Dashboard</h1>
       <div class=\"stamp\">
-        <div id=\"today-date\"></div>
-        <div id=\"last-refresh\"></div>
+        <div class=\"stamp-main\" id=\"stamp-main\"></div>
+        <div class=\"stamp-sub\" id=\"stamp-sub\"></div>
       </div>
       <div class=\"actions\"><button id=\"theme-toggle\" type=\"button\">Toggle Theme</button><a href=\"goals_admin.html\">Goals Admin</a></div>
     </div>
@@ -869,13 +881,14 @@ def main() -> None:
     const sf = DATA.salesforce || {{}};
     const dash = DATA.dashboard || {{}};
     const services = DATA.services || {{}};
-    const todayEl = document.getElementById('today-date');
-    if (todayEl) {{
-      todayEl.textContent = 'Dashboard Date: ' + new Date().toLocaleDateString();
+    const stampMainEl = document.getElementById('stamp-main');
+    const stampSubEl = document.getElementById('stamp-sub');
+    const now = new Date();
+    if (stampMainEl) {{
+      stampMainEl.textContent = 'As of ' + now.toLocaleDateString(undefined, {{ weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }});
     }}
-    const refreshEl = document.getElementById('last-refresh');
-    if (refreshEl) {{
-      refreshEl.textContent = 'Last Refreshed: ' + GENERATED_AT;
+    if (stampSubEl) {{
+      stampSubEl.textContent = 'Data updated: ' + GENERATED_AT;
     }}
     document.getElementById('k-arr').textContent = money((dash.arr || {{}}).value || (sf.arr || {{}}).value || 0);
     document.getElementById('k-new-customers').textContent = num((sf.new_customers || {{}}).qtd_total || 0);
@@ -889,7 +902,8 @@ def main() -> None:
     const svcBadge = svcStatus === 'red' ? '<span class=\"badge b-red\">Red</span>' : '<span class=\"badge b-green\">Green</span>';
     document.getElementById('k-svc-status').innerHTML = svcBadge;
     const breakdownEl = document.getElementById('k-svc-status-breakdown');
-    const breakdown = Array.isArray(services.status_breakdown) ? services.status_breakdown : [];
+    const breakdown = (Array.isArray(services.status_breakdown) ? services.status_breakdown : [])
+      .filter(item => String(item.status || '').trim().toLowerCase() !== 'completed');
     if (breakdownEl) {{
       if (!breakdown.length) {{
         breakdownEl.innerHTML = '<span class=\"status-chip\">No status data</span>';
