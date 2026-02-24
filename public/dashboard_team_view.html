@@ -248,7 +248,7 @@
     const ARR_HISTORY = [{"quarter": "Q2-2024", "value": 920441.25}, {"quarter": "Q3-2024", "value": 941425.5}, {"quarter": "Q4-2024", "value": 957989.0}, {"quarter": "Q1-2025", "value": 973958.55005}, {"quarter": "Q2-2025", "value": 991001.15005}, {"quarter": "Q3-2025", "value": 1003099.65005}, {"quarter": "Q4-2025", "value": 1005173.65088}, {"quarter": "Q1-2026", "value": 1053498.40088}];
     const NRR_DOLLAR_HISTORY = [{"quarter": "Q1-2025", "value": 0.8792408210768073}, {"quarter": "Q2-2025", "value": 0.8413659273760765}, {"quarter": "Q3-2025", "value": 0.9333100067635891}, {"quarter": "Q4-2025", "value": 0.8400561472863652}, {"quarter": "Q1-2026", "value": 0.9407185621280181}];
     const NRR_CUSTOMER_HISTORY = [{"quarter": "Q1-2025", "value": 0.8620689655172413}, {"quarter": "Q2-2025", "value": 0.7441860465116279}, {"quarter": "Q3-2025", "value": 0.9130434782608696}, {"quarter": "Q4-2025", "value": 0.8771929824561404}, {"quarter": "Q1-2026", "value": 0.8864628820960698}];
-    const GENERATED_AT = "2026-02-24 19:30 UTC";
+    const GENERATED_AT = "2026-02-24 19:32 UTC";
     const CURRENT_QUARTER = "Q1-2026";
     const VIEW_ONLY = true;
     if (VIEW_ONLY) document.documentElement.classList.add('view-only');
@@ -582,7 +582,7 @@
               borderWidth: 3,
               pointRadius: actual.map(v => v === null ? 0 : 4),
               pointHoverRadius: actual.map(v => v === null ? 0 : 6),
-              pointHitRadius: 6,
+              pointHitRadius: 4,
               pointBackgroundColor: statuses.map(s => colorByStatus(s)),
               pointBorderColor: statuses.map(s => colorByStatus(s)),
               segment: { borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) },
@@ -608,7 +608,7 @@
               borderDash: [6,4],
               pointRadius: goals.map((v, i) => (v === null || i !== currentIndex) ? 0 : 3),
               pointHoverRadius: goals.map(v => v === null ? 0 : 6),
-              pointHitRadius: 6,
+              pointHitRadius: 4,
               pointBackgroundColor: ui.goal,
               spanGaps: false,
               tension: 0.15,
@@ -629,10 +629,11 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          interaction: { mode: 'nearest', intersect: true },
+          interaction: { mode: 'point', intersect: true },
           layout: { padding: layoutPadding },
           plugins: {
-            legend: { display: true, labels: { boxWidth: 10, color: ui.text } }
+            legend: { display: true, labels: { boxWidth: 10, color: ui.text } },
+            tooltip: { mode: 'point', intersect: true }
           },
           scales: {
             y: {
@@ -712,7 +713,7 @@
               borderWidth: 3,
               pointRadius: 3,
               pointHoverRadius: 6,
-              pointHitRadius: 6,
+              pointHitRadius: 4,
               pointBackgroundColor: statuses.map(s => colorByStatus(s)),
               pointBorderColor: statuses.map(s => colorByStatus(s)),
               segment: { borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) },
@@ -728,7 +729,7 @@
               borderDash: [6,4],
               pointRadius: labels.map((_, i) => i === currentIndex ? 3 : 0),
               pointHoverRadius: labels.map((_, i) => i === currentIndex ? 6 : 0),
-              pointHitRadius: 6,
+              pointHitRadius: 4,
               pointBackgroundColor: ui.goal,
               tension: 0,
               fill: false,
@@ -739,10 +740,11 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          interaction: { mode: 'nearest', intersect: true },
+          interaction: { mode: 'point', intersect: true },
           layout: { padding: { top: 14, right: 14, left: 16, bottom: 6 } },
           plugins: {
-            legend: { display: true, labels: { boxWidth: 10, color: ui.text } }
+            legend: { display: true, labels: { boxWidth: 10, color: ui.text } },
+            tooltip: { mode: 'point', intersect: true }
           },
           scales: {
             y: { beginAtZero: false, min: 0.6, max: 1.0, grid: { color: ui.grid }, ticks: { color: ui.muted, padding: 6, callback: (v) => pct(v) } },

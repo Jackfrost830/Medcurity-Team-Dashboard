@@ -774,7 +774,7 @@ def main() -> None:
               borderWidth: 3,
               pointRadius: actual.map(v => v === null ? 0 : 4),
               pointHoverRadius: actual.map(v => v === null ? 0 : 6),
-              pointHitRadius: 6,
+              pointHitRadius: 4,
               pointBackgroundColor: statuses.map(s => colorByStatus(s)),
               pointBorderColor: statuses.map(s => colorByStatus(s)),
               segment: {{ borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) }},
@@ -800,7 +800,7 @@ def main() -> None:
               borderDash: [6,4],
               pointRadius: goals.map((v, i) => (v === null || i !== currentIndex) ? 0 : 3),
               pointHoverRadius: goals.map(v => v === null ? 0 : 6),
-              pointHitRadius: 6,
+              pointHitRadius: 4,
               pointBackgroundColor: ui.goal,
               spanGaps: false,
               tension: 0.15,
@@ -821,10 +821,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'nearest', intersect: true }},
+          interaction: {{ mode: 'point', intersect: true }},
           layout: {{ padding: layoutPadding }},
           plugins: {{
-            legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }}
+            legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }},
+            tooltip: {{ mode: 'point', intersect: true }}
           }},
           scales: {{
             y: {{
@@ -904,7 +905,7 @@ def main() -> None:
               borderWidth: 3,
               pointRadius: 3,
               pointHoverRadius: 6,
-              pointHitRadius: 6,
+              pointHitRadius: 4,
               pointBackgroundColor: statuses.map(s => colorByStatus(s)),
               pointBorderColor: statuses.map(s => colorByStatus(s)),
               segment: {{ borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) }},
@@ -920,7 +921,7 @@ def main() -> None:
               borderDash: [6,4],
               pointRadius: labels.map((_, i) => i === currentIndex ? 3 : 0),
               pointHoverRadius: labels.map((_, i) => i === currentIndex ? 6 : 0),
-              pointHitRadius: 6,
+              pointHitRadius: 4,
               pointBackgroundColor: ui.goal,
               tension: 0,
               fill: false,
@@ -931,10 +932,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'nearest', intersect: true }},
+          interaction: {{ mode: 'point', intersect: true }},
           layout: {{ padding: {{ top: 14, right: 14, left: 16, bottom: 6 }} }},
           plugins: {{
-            legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }}
+            legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }},
+            tooltip: {{ mode: 'point', intersect: true }}
           }},
           scales: {{
             y: {{ beginAtZero: false, min: 0.6, max: 1.0, grid: {{ color: ui.grid }}, ticks: {{ color: ui.muted, padding: 6, callback: (v) => pct(v) }} }},
