@@ -1,0 +1,118 @@
+{
+  "financial_workbook": "/Users/braydenfrost/Library/CloudStorage/OneDrive-SharedLibraries-Medcurity,Inc/Medcurity, Inc Team Site - Documents/Admin/Medcurity Stats/ARR/Medcurity Financial and SaaS Metrics - James.xlsx",
+  "output_path": "dashboard_metrics_output.json",
+  "preferred_source": "salesforce_then_excel",
+  "quarter_anchor_date": "",
+  "dashboard_metrics": [
+    "arr",
+    "nrr_customer_pct",
+    "nrr_dollar_pct",
+    "renewals_number",
+    "new_sales",
+    "total_active_pipeline",
+    "new_customers",
+    "lost_customers",
+    "sql",
+    "mql"
+  ],
+  "salesforce_financial_model": {
+    "report_id": "00O5w000009E4ZyEAK",
+    "owner_filter": "Consolidated"
+  },
+  "salesforce_quarter_metrics": {
+    "renewals_number": {
+      "report_id": "00ORO00000CN3nu2AD",
+      "aggregation": "amount",
+      "date_keys": [
+        "Close Date"
+      ],
+      "series_mode": "cumulative"
+    },
+    "new_sales": {
+      "report_id": "00ORO00000CMuW82AL",
+      "aggregation": "amount",
+      "date_keys": [
+        "Close Date"
+      ],
+      "series_mode": "cumulative"
+    },
+    "total_active_pipeline": {
+      "report_id": "00O5w000008XOz1EAG",
+      "aggregation": "amount",
+      "date_keys": [
+        "Close Date"
+      ],
+      "window_mode": "current_snapshot",
+      "series_mode": "snapshot"
+    },
+    "new_customers": {
+      "report_id": "00ORO00000FHOX92AP",
+      "aggregation": "count",
+      "date_keys": [
+        "Close Date"
+      ],
+      "series_mode": "cumulative"
+    },
+    "lost_customers": {
+      "report_id": "00O5w000009FLTdEAO",
+      "aggregation": "count",
+      "date_keys": [
+        "Close Date"
+      ],
+      "filters": {
+        "Stage": "Closed Lost"
+      },
+      "list_accounts": true,
+      "window_mode": "last_week"
+    },
+    "sql": {
+      "report_id": "00ORO000002i21m2AA",
+      "aggregation": "count",
+      "date_keys": [
+        "Account: Created Date"
+      ],
+      "series_mode": "cumulative"
+    },
+    "mql": {
+      "report_ids": [
+        "00O5w000009F5BNEA0",
+        "00O5w000009E9WWEA0"
+      ],
+      "aggregation": "count",
+      "date_keys": [
+        "Contact.MQL__c",
+        "Lead.MQL__c",
+        "MQL"
+      ],
+      "series_mode": "cumulative"
+    }
+  },
+  "excel": {
+    "sheet": "Summary",
+    "arr_row": 23,
+    "cells": {
+      "nrr_customer_pct": "AM27",
+      "nrr_dollar_pct": "AM29"
+    }
+  },
+  "salesforce_reports": {},
+  "services": {
+    "enabled": true,
+    "source": "admin_dashboard_db",
+    "admin_dashboard_db_path": "/path/to/medcurity-client-dashboard/client_status.db",
+    "clickup": {
+      "list_id": "",
+      "closed_statuses": [
+        "complete",
+        "completed",
+        "closed",
+        "done",
+        "cancelled",
+        "canceled"
+      ],
+      "red_item_threshold": 3,
+      "red_items_field": ""
+    },
+    "admin_dashboard_json": ""
+  }
+}

@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+.TemporaryItems
+.DS_Store
+*.db
+dashboard_metrics_output.json
+dashboard_config.json
+*.xlsx

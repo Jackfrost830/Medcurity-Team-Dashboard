@@ -1,0 +1,969 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Medcurity Dashboard Preview</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <style>
+    :root {
+      --bg:#f3f7fc; --card:#ffffff; --cardSoft:#fbfdff; --ink:#0f2747; --muted:#5f7190; --line:#d8e4f3;
+      --green:#39b36b; --yellow:#d9a620; --red:#d44f4f; --goal:#2b76c9; --arr:#1f7bc6;
+      --grid:rgba(15,39,71,.13);
+    }
+    [data-theme="dark"] {
+      --bg:#0d1624; --card:#111f32; --cardSoft:#15263d; --ink:#e7f0fd; --muted:#9fb3ce; --line:#2a3e59;
+      --green:#49c67b; --yellow:#e1b63d; --red:#e26a6a; --goal:#6aa9ff; --arr:#69b5ff;
+      --grid:rgba(231,240,253,.16);
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: "Avenir Next", "Manrope", "SF Pro Text", "Segoe UI", sans-serif; color:var(--ink); background:radial-gradient(1200px 580px at 90% -14%, rgba(111,170,228,.38) 0%, transparent 62%), linear-gradient(180deg,#f8fbff 0%, var(--bg) 34%); transition:background .2s ease,color .2s ease; }
+    .wrap { max-width:1760px; margin:16px auto; padding:0 20px 22px; }
+    .top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+    h1 { margin:0; font-size:34px; letter-spacing:.01em; }
+    .stamp { text-align:right; color:var(--muted); font-size:12px; line-height:1.35; }
+    .actions { display:flex; gap:8px; }
+    .actions a, .actions button { color:var(--ink); text-decoration:none; font-weight:700; border:1px solid var(--line); padding:7px 10px; border-radius:8px; background:var(--card); cursor:pointer; }
+    .sections { display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start; }
+    .sec { border:1px solid var(--line); border-radius:16px; background:var(--card); padding:12px; box-shadow:0 10px 24px rgba(19,40,68,.10); }
+    .sales { grid-column: 1; grid-row: 1; }
+    .marketing { grid-column: 1; grid-row: 2; }
+    .cs { grid-column: 2; grid-row: 1 / span 2; }
+    .svc { grid-column: 1; grid-row: 3; margin-top:0; }
+    .dev { grid-column: 2; grid-row: 3; margin-top:0; }
+    .sec h2 { margin:2px 2px 10px; font-size:30px; }
+    .kpi-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+    .pair-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px; }
+    .pair-col { display:grid; grid-template-rows:auto 1fr; gap:8px; }
+    .kpi { border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--cardSoft); }
+    .k { color:var(--muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+    .v { margin-top:4px; font-size:28px; font-weight:800; }
+    .chart-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-bottom:8px; }
+    .chart { border:1px solid var(--line); border-radius:10px; padding:10px; min-height:300px; background:var(--card); position:relative; }
+    .chart.span2 { grid-column:1 / -1; }
+    .chart.tall { min-height:350px; }
+    .chart canvas { width:100% !important; height:260px !important; }
+    .chart.tall canvas { height:310px !important; }
+    .chart.no-data::after { content: 'Waiting for Salesforce data'; position:absolute; inset:auto 10px 10px 10px; text-align:center; color:var(--muted); font-size:12px; pointer-events:none; }
+    .chart h3 { margin:0 0 4px; font-size:14px; }
+    .small { color:var(--muted); font-size:11px; }
+    .list { border:1px solid var(--line); border-radius:10px; padding:8px; background:var(--cardSoft); }
+    .cs-extra { display:grid; grid-template-columns:1.2fr .8fr; gap:10px; margin-top:8px; }
+    .q-card { border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--cardSoft); }
+    .q-title { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; }
+    .q-input, .q-textarea { width:100%; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--ink); padding:8px; }
+    .q-textarea { min-height:92px; resize:vertical; }
+    .team-only { display:none; }
+    .view-only .owner-only { display:none !important; }
+    .view-only .team-only { display:block !important; }
+    .quote-view { margin:0; font-size:18px; line-height:1.45; color:var(--ink); }
+    .quote-meta { margin-top:8px; color:var(--muted); font-size:13px; }
+    .bill-readonly { margin-top:8px; }
+    .bill-row { display:flex; justify-content:space-between; align-items:center; margin:8px 0; font-size:13px; color:var(--muted); }
+    .bill-val { font-size:28px; font-weight:800; color:var(--yellow); }
+    .svc-layout { display:block; }
+    .health-card .v { font-size:22px; }
+    .health-wrap { margin-top:6px; border-top:1px solid var(--line); padding-top:8px; }
+    .health-wrap canvas { width:100% !important; height:150px !important; }
+    .svc-title { margin:0 0 8px; font-size:30px; }
+    .svc-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+    .svc-status { margin-top:8px; font-size:13px; color:var(--muted); }
+    .dev-head { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+    .dev-title { margin:0; font-size:30px; }
+    .dev-actions button { color:var(--ink); border:1px solid var(--line); background:var(--cardSoft); padding:6px 10px; border-radius:8px; cursor:pointer; }
+    .dev-actions .danger, .m-table .danger { border-color: rgba(212,79,79,.35); color: var(--red); }
+    .edit-only { display:none; }
+    .m-table { width:100%; border-collapse:collapse; }
+    .m-table th, .m-table td { border-bottom:1px solid var(--line); padding:8px; font-size:13px; }
+    .m-table th { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+    .m-table input[type="text"], .m-table input[type="date"] { width:100%; border:1px solid var(--line); border-radius:8px; background:var(--cardSoft); color:var(--ink); padding:6px 8px; }
+    .badge { display:inline-block; border-radius:999px; padding:4px 8px; font-size:11px; font-weight:700; }
+    .b-green { background:rgba(57,179,107,.18); color:var(--green); }
+    .b-yellow { background:rgba(217,166,32,.18); color:var(--yellow); }
+    .b-red { background:rgba(212,79,79,.18); color:var(--red); }
+    table { width:100%; border-collapse: collapse; }
+    th, td { font-size:12px; text-align:left; padding:6px; border-bottom:1px solid var(--line); }
+    th { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
+    @media (max-width: 1300px) {
+      .sections { grid-template-columns:1fr; }
+      .sales, .marketing, .cs, .svc, .dev { grid-column: auto; grid-row: auto; }
+    }
+    @media (max-width: 980px) { .svc-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .cs-extra { grid-template-columns:1fr; } }
+    @media (max-width: 780px) { .chart-grid, .pair-grid, .svc-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <h1>Team Dashboard</h1>
+      <div class="stamp">
+        <div id="today-date"></div>
+        <div id="last-refresh"></div>
+      </div>
+      <div class="actions"><button id="theme-toggle" type="button">Toggle Theme</button><a href="goals_admin.html">Goals Admin</a></div>
+    </div>
+
+    <div class="sections">
+      <section class="sec sales">
+        <h2>Sales</h2>
+        <div class="pair-grid">
+          <div class="pair-col">
+            <div class="kpi"><div class="k">ARR</div><div class="v" id="k-arr"></div></div>
+            <div class="chart tall"><h3>ARR by Quarter <span class="small">Rolling 365-day total</span></h3><canvas id="c-arr_history"></canvas></div>
+          </div>
+          <div class="pair-col">
+            <div class="kpi"><div class="k">New Customers QTD</div><div class="v" id="k-new-customers"></div></div>
+            <div class="chart"><h3>New Customers <span class="small">Running total vs Goal</span></h3><canvas id="c-new_customers"></canvas></div>
+          </div>
+        </div>
+        <div class="chart-grid">
+          <div class="chart"><h3>New Sales <span class="small">Running total vs Goal</span></h3><canvas id="c-new_sales"></canvas></div>
+          <div class="chart"><h3>Total Active Pipeline <span class="small">Current snapshot vs Goal</span></h3><canvas id="c-total_active_pipeline"></canvas></div>
+        </div>
+      </section>
+
+      <section class="sec marketing">
+        <h2>Marketing</h2>
+        <div class="chart-grid">
+          <div class="chart"><h3>SQL <span class="small">Running total vs Goal</span></h3><canvas id="c-sql"></canvas></div>
+          <div class="chart"><h3>MQL <span class="small">Running total vs Goal</span></h3><canvas id="c-mql"></canvas></div>
+        </div>
+      </section>
+
+      <section class="sec cs">
+        <h2>Customer Success</h2>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="k">NRR by Customer</div><div class="v" id="k-nrr-c"></div></div>
+          <div class="kpi"><div class="k">NRR by Dollar</div><div class="v" id="k-nrr-d"></div></div>
+        </div>
+        <div class="chart-grid">
+          <div class="chart"><h3>NRR by Customer <span class="small">Quarter trend</span></h3><canvas id="c-nrr_customer_history"></canvas></div>
+          <div class="chart"><h3>NRR by Dollar <span class="small">Quarter trend</span></h3><canvas id="c-nrr_dollar_history"></canvas></div>
+          <div class="chart span2 tall"><h3>Renewals <span class="small">Running total amount vs Goal</span></h3><canvas id="c-renewals_number"></canvas></div>
+        </div>
+        <div class="list">
+          <h3 style="margin:0 0 2px; font-size:14px">Lost Customers</h3>
+          <div class="small" style="margin-bottom:8px"><span id="k-lost"></span> account(s)</div>
+          <table>
+            <thead><tr><th>Account</th></tr></thead>
+            <tbody id="lost-body"></tbody>
+          </table>
+        </div>
+        <div class="cs-extra">
+          <div class="q-card">
+            <div class="q-title"><strong>Most Recent Quote <span style="color:var(--green)">10/10</span></strong><span class="small">Editable</span></div>
+            <div class="owner-only">
+              <textarea id="quote-text" class="q-textarea" placeholder="Paste customer quote here"></textarea>
+            </div>
+            <div class="team-only" id="quote-readonly">
+              <p class="quote-view" id="quote-view-text">None</p>
+              <div class="quote-meta" id="quote-view-meta"></div>
+            </div>
+            <div class="owner-only" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+              <input id="quote-name" class="q-input" placeholder="Person Name" />
+              <input id="quote-org" class="q-input" placeholder="Organization" />
+            </div>
+          </div>
+          <div class="q-card">
+            <div class="q-title"><strong>QTD Billing Progress</strong><span class="small">Manual input</span></div>
+            <div class="bill-row"><span>Quarter Goal</span><strong id="billing-goal"></strong></div>
+            <div class="owner-only">
+            <div class="bill-row"><span>Current Progress</span></div>
+            <input id="billing-progress" class="q-input" inputmode="numeric" placeholder="Paste current QTD billing" />
+            </div>
+            <div class="bill-row"><span>Progress</span><span id="billing-pct" class="bill-val"></span></div>
+          </div>
+        </div>
+      </section>
+    <section class="sec svc">
+      <h2 class="svc-title">Services</h2>
+      <div class="svc-layout">
+        <div class="svc-grid">
+          <div class="kpi"><div class="k">Active Projects</div><div class="v" id="k-svc-active"></div></div>
+          <div class="kpi"><div class="k">Closed This Quarter</div><div class="v" id="k-svc-closed"></div></div>
+          <div class="kpi"><div class="k">Avg Close Days (QTD)</div><div class="v" id="k-svc-avg"></div></div>
+          <div class="kpi health-card">
+            <div class="k">Project Health</div>
+            <div class="v" id="k-svc-status"></div>
+            <div class="health-wrap"><canvas id="c-svc-health"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="svc-status" id="k-svc-warning"></div>
+    </section>
+
+    <section class="sec dev">
+      <div class="dev-head">
+        <h2 class="dev-title">Development</h2>
+        <div class="dev-actions"><button id="edit-milestones" type="button">Edit</button><button id="remove-milestones" class="danger edit-only" type="button">Remove Selected</button><button id="add-milestone" class="edit-only" type="button">Add Milestone</button></div>
+      </div>
+      <table class="m-table">
+        <thead><tr><th class="edit-only">Select</th><th>Project</th><th>Completion Date</th><th>Complete</th><th>Status</th></tr></thead>
+        <tbody id="milestone-body"></tbody>
+      </table>
+    </section>
+    </div>
+  </div>
+
+  <script>
+    const DATA = {"excel": {"arr": {"value": 1005173.6508800001, "source": {"sheet": "Summary", "cell": "AE23", "row": 23}}, "nrr_customer_pct": {"value": 0.9437580760791858, "source": {"sheet": "Summary", "cell": "AM27"}}, "nrr_dollar_pct": {"value": 0.9066147859922179, "source": {"sheet": "Summary", "cell": "AM29"}}}, "salesforce": {"arr": {"value": 1053498.40088, "report_id": "00O5w000009E4ZyEAK", "model": "financial_sheet_equivalent"}, "nrr_customer_pct": {"value": 0.8913043478260869, "report_id": "00O5w000009E4ZyEAK", "model": "financial_sheet_equivalent"}, "nrr_dollar_pct": {"value": 0.9437845373561741, "report_id": "00O5w000009E4ZyEAK", "model": "financial_sheet_equivalent"}, "financial_model_meta": {"report_id": "00O5w000009E4ZyEAK", "owner_filter": "Consolidated", "window_start": "2025-02-23", "window_end": "2026-02-23", "won_count_rolling_365": 230, "lost_count_rolling_365": 25, "lost_amount_rolling_365": 59222.9}, "renewals_number": {"report_ids": ["00ORO00000CN3nu2AD"], "aggregation": "amount", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 44849.0}, {"month": "2026-02", "label": "Feb", "value": 141061.24998999998}, {"month": "2026-03", "label": "Mar", "value": 141061.24998999998}], "qtd_total": 141061.24998999998, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "new_sales": {"report_ids": ["00ORO00000CMuW82AL"], "aggregation": "amount", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 15087.0}, {"month": "2026-02", "label": "Feb", "value": 17883.0}, {"month": "2026-03", "label": "Mar", "value": 17883.0}], "qtd_total": 17883.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "total_active_pipeline": {"report_ids": ["00O5w000008XOz1EAG"], "aggregation": "amount", "window_mode": "current_snapshot", "series": [{"month": "2026-01", "label": "Jan", "value": 629896.9801506}, {"month": "2026-02", "label": "Feb", "value": 629896.9801506}, {"month": "2026-03", "label": "Mar", "value": null}], "snapshot_value": 629896.9801506, "qtd_total": 629896.9801506, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "snapshot"}, "new_customers": {"report_ids": ["00ORO00000FHOX92AP"], "aggregation": "count", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 6.0}, {"month": "2026-02", "label": "Feb", "value": 8.0}, {"month": "2026-03", "label": "Mar", "value": 8.0}], "qtd_total": 8.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "lost_customers": {"report_ids": ["00O5w000009FLTdEAO"], "aggregation": "count", "window_mode": "last_week", "value": 0.0, "last_week_start": "2026-02-16", "last_week_end_exclusive": "2026-02-24"}, "sql": {"report_ids": ["00ORO000002i21m2AA"], "aggregation": "count", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 2.0}, {"month": "2026-02", "label": "Feb", "value": 3.0}, {"month": "2026-03", "label": "Mar", "value": 3.0}], "qtd_total": 3.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "mql": {"report_ids": ["00O5w000009F5BNEA0", "00O5w000009E9WWEA0"], "aggregation": "count", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 87.0}, {"month": "2026-02", "label": "Feb", "value": 92.0}, {"month": "2026-03", "label": "Mar", "value": 92.0}], "qtd_total": 92.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}}, "services": {"status": "ok", "source": "admin_dashboard_db", "quarter": "Q1-2026", "active_projects": 29, "closed_projects_this_quarter": 1, "avg_project_close_days_this_quarter": 51.59615384615385, "overall_project_status": "green", "projects_over_red_threshold": [], "task_count": 101}, "dashboard": {"arr": {"value": 1053498.40088, "source": "salesforce"}, "nrr_customer_pct": {"value": 0.8913043478260869, "source": "salesforce"}, "nrr_dollar_pct": {"value": 0.9437845373561741, "source": "salesforce"}, "renewals_number": {"value": 141061.24998999998, "source": "salesforce"}, "new_sales": {"value": 17883.0, "source": "salesforce"}, "total_active_pipeline": {"value": 629896.9801506, "source": "salesforce"}, "new_customers": {"value": 8.0, "source": "salesforce"}, "lost_customers": {"value": 0.0, "source": "salesforce"}, "sql": {"value": 3.0, "source": "salesforce"}, "mql": {"value": 92.0, "source": "salesforce"}, "services_active_projects": {"value": 29, "source": "services"}, "services_closed_projects_this_quarter": {"value": 1, "source": "services"}, "services_avg_project_close_days_this_quarter": {"value": 51.59615384615385, "source": "services"}, "services_overall_project_status": {"value": "green", "source": "services"}}, "meta": {"workbook": "/Users/braydenfrost/Library/CloudStorage/OneDrive-SharedLibraries-Medcurity,Inc/Medcurity, Inc Team Site - Documents/Admin/Medcurity Stats/ARR/Medcurity Financial and SaaS Metrics - James.xlsx", "summary_sheet": "Summary", "preferred_source": "salesforce_then_excel", "quarter_anchor_date": "2026-02-23"}};
+    const CHART_DATA = {"new_sales": [{"month": "2026-01", "label": "Jan", "value": 15087.0}, {"month": "2026-02", "label": "Feb", "value": 17883.0}, {"month": "2026-03", "label": "Mar", "value": 17883.0}], "total_active_pipeline": [{"month": "2026-01", "label": "Jan", "value": 629896.9801506}, {"month": "2026-02", "label": "Feb", "value": 629896.9801506}, {"month": "2026-03", "label": "Mar", "value": null}], "new_customers": [{"month": "2026-01", "label": "Jan", "value": 6.0}, {"month": "2026-02", "label": "Feb", "value": 8.0}, {"month": "2026-03", "label": "Mar", "value": 8.0}], "sql": [{"month": "2026-01", "label": "Jan", "value": 2.0}, {"month": "2026-02", "label": "Feb", "value": 3.0}, {"month": "2026-03", "label": "Mar", "value": 3.0}], "mql": [{"month": "2026-01", "label": "Jan", "value": 87.0}, {"month": "2026-02", "label": "Feb", "value": 92.0}, {"month": "2026-03", "label": "Mar", "value": 92.0}], "renewals_number": [{"month": "2026-01", "label": "Jan", "value": 44849.0}, {"month": "2026-02", "label": "Feb", "value": 141061.24998999998}, {"month": "2026-03", "label": "Mar", "value": 141061.24998999998}]};
+    const DEFAULT_GOALS = {"new_sales": {"quarter_goal": 36000, "month_goals": [null, null, null]}, "total_active_pipeline": {"quarter_goal": 800000, "month_goals": [800000, 800000, 800000]}, "new_customers": {"quarter_goal": 24, "month_goals": [null, null, null]}, "arr": {"quarter_goal": 1100000, "month_goals": [null, null, null]}, "sql": {"quarter_goal": 15, "month_goals": [null, null, null]}, "mql": {"quarter_goal": 75, "month_goals": [null, null, null]}, "renewals_number": {"quarter_goal": 150000, "month_goals": [null, null, null]}, "nrr_customer_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "nrr_dollar_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "qtd_billing_progress": {"quarter_goal": 350000, "month_goals": [null, null, null]}};
+    const ARR_HISTORY = [{"quarter": "Q2-2024", "value": 920441.25}, {"quarter": "Q3-2024", "value": 941425.5}, {"quarter": "Q4-2024", "value": 957989.0}, {"quarter": "Q1-2025", "value": 973958.55005}, {"quarter": "Q2-2025", "value": 991001.15005}, {"quarter": "Q3-2025", "value": 1003099.65005}, {"quarter": "Q4-2025", "value": 1005173.65088}, {"quarter": "Q1-2026", "value": 1053498.40088}];
+    const NRR_DOLLAR_HISTORY = [{"quarter": "Q1-2025", "value": 0.8792408210768073}, {"quarter": "Q2-2025", "value": 0.8413659273760765}, {"quarter": "Q3-2025", "value": 0.9333100067635891}, {"quarter": "Q4-2025", "value": 0.8400561472863652}, {"quarter": "Q1-2026", "value": 0.9437845373561741}];
+    const NRR_CUSTOMER_HISTORY = [{"quarter": "Q1-2025", "value": 0.8620689655172413}, {"quarter": "Q2-2025", "value": 0.7441860465116279}, {"quarter": "Q3-2025", "value": 0.9130434782608696}, {"quarter": "Q4-2025", "value": 0.8771929824561404}, {"quarter": "Q1-2026", "value": 0.8913043478260869}];
+    const GENERATED_AT = "2026-02-24 01:18 UTC";
+    const VIEW_ONLY = false;
+    if (VIEW_ONLY) document.documentElement.classList.add('view-only');
+    const THEME_KEY = 'dashboard_theme_v1';
+    const savedTheme = localStorage.getItem(THEME_KEY) || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme === 'dark' ? 'dark' : 'light');
+    const MILESTONE_KEY = 'dashboard_milestones_v1';
+    const CS_CONTENT_KEY = 'dashboard_cs_content_v1';
+    const DEFAULT_MILESTONES = [
+      { title: 'PhishRX', due_date: '2026-03-31', completed: false },
+      { title: 'Policy Updates', due_date: '2026-03-01', completed: false },
+      { title: 'LMS Build', due_date: '2026-02-16', completed: true },
+      { title: 'Small Practice SRA', due_date: '2026-02-21', completed: false }
+    ];
+
+    Chart.register(ChartDataLabels);
+
+    function money(v) { return '$' + Number(v || 0).toLocaleString(undefined, {maximumFractionDigits:0}); }
+    function pct(v) { return (Number(v || 0) * 100).toFixed(1) + '%'; }
+    function num(v) { return Number(v || 0).toLocaleString(undefined, {maximumFractionDigits:0}); }
+
+    function normalizeGoalEntry(raw, fallback, metricKey = '') {
+      if (metricKey === 'total_active_pipeline') {
+        return { quarter_goal: 800000, month_goals: [800000, 800000, 800000] };
+      }
+      if (Array.isArray(raw)) {
+        const month = raw.map(x => Number(x || 0));
+        return { quarter_goal: month.reduce((a, b) => a + b, 0), month_goals: month };
+      }
+      const src = raw && typeof raw === 'object' ? raw : fallback;
+      const quarter_goal = Number(src?.quarter_goal ?? fallback.quarter_goal ?? 0);
+      const month_goals = (src?.month_goals || src?.splits || fallback.month_goals || [null, null, null]).map(v => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      });
+      const isPct = metricKey === 'nrr_customer_pct' || metricKey === 'nrr_dollar_pct';
+      const normalizePct = (v) => {
+        if (v === null || v === undefined) return v;
+        return Number(v) > 1 ? Number(v) / 100 : Number(v);
+      };
+      return { quarter_goal, month_goals };
+    }
+
+    function normalizedGoalValues(entry, metricKey) {
+      const isPct = metricKey === 'nrr_customer_pct' || metricKey === 'nrr_dollar_pct';
+      if (!isPct) return entry;
+      const q = Number(entry?.quarter_goal || 0);
+      const m = Array.isArray(entry?.month_goals) ? entry.month_goals : [null, null, null];
+      return {
+        quarter_goal: q > 1 ? q / 100 : q,
+        month_goals: m.map(v => (v === null || v === undefined) ? null : (Number(v) > 1 ? Number(v) / 100 : Number(v)))
+      };
+    }
+
+    function loadGoals() {
+      try {
+        const v2 = localStorage.getItem('dashboard_goals_v2');
+        if (v2) {
+          const parsed = JSON.parse(v2);
+          const out = {};
+          Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(parsed[k], DEFAULT_GOALS[k], k));
+          return out;
+        }
+        const v1 = localStorage.getItem('dashboard_goals_v1');
+        if (v1) {
+          const parsed = JSON.parse(v1);
+          const out = {};
+          Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(parsed[k], DEFAULT_GOALS[k], k));
+          return out;
+        }
+      } catch (e) {}
+      const out = {};
+      Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(DEFAULT_GOALS[k], DEFAULT_GOALS[k], k));
+      return out;
+    }
+
+    function monthlyGoals(metricKey, mode) {
+      const goals = loadGoals();
+      const g = normalizedGoalValues(
+        normalizeGoalEntry(goals[metricKey], DEFAULT_GOALS[metricKey], metricKey),
+        metricKey
+      );
+      if (metricKey === 'total_active_pipeline' || mode === 'snapshot') {
+        const v = Number((g.month_goals && g.month_goals[0]) || g.quarter_goal || 800000);
+        return { monthly: [v, v, v], cumulative: [v, v, v] };
+      }
+      const cum = [...(g.month_goals || [null, null, null])];
+      const targetQuarter = Number(g.quarter_goal || 0);
+      cum[2] = (cum[2] === null || cum[2] === undefined) ? targetQuarter : Number(cum[2] || 0);
+      cum[2] = targetQuarter;
+
+      if (cum[0] === null && cum[1] === null) {
+        cum[0] = cum[2] / 3;
+        cum[1] = (cum[2] * 2) / 3;
+      } else if (cum[0] !== null && cum[1] === null) {
+        cum[1] = (Number(cum[0]) + Number(cum[2])) / 2;
+      } else if (cum[0] === null && cum[1] !== null) {
+        cum[0] = Number(cum[1]) / 2;
+      }
+
+      cum[0] = Number(cum[0] || 0);
+      cum[1] = Number(cum[1] || 0);
+      cum[2] = Number(cum[2] || 0);
+      if (cum[1] < cum[0]) cum[1] = cum[0];
+      if (cum[2] < cum[1]) cum[2] = cum[1];
+
+      const monthly = [cum[0], cum[1] - cum[0], cum[2] - cum[1]];
+      return {
+        monthly,
+        cumulative: [cum[0], cum[1], cum[2]]
+      };
+    }
+
+    function pointStatus(value, goalCum, idx) {
+      if (value === null || value === undefined) return null;
+      const v = Number(value || 0);
+      const g0 = Number(goalCum?.[0] || 0);
+      const g1 = Number(goalCum?.[1] || g0);
+      const g2 = Number(goalCum?.[2] || g1);
+      if (idx === 0) return v >= g0 ? 'green' : 'red';
+      if (idx === 1) {
+        if (v >= g1) return 'green';
+        if (v >= g0) return 'yellow';
+        return 'red';
+      }
+      if (v >= g2) return 'green';
+      if (v >= g1) return 'yellow';
+      return 'red';
+    }
+
+    function cssVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function chartUi() {
+      return {
+        text: cssVar('--ink'),
+        muted: cssVar('--muted'),
+        card: cssVar('--card'),
+        line: cssVar('--line'),
+        grid: cssVar('--grid'),
+        red: cssVar('--red'),
+        yellow: cssVar('--yellow'),
+        green: cssVar('--green'),
+        goal: cssVar('--goal'),
+        arr: cssVar('--arr'),
+        clear: 'rgba(0,0,0,0)'
+      };
+    }
+
+    function fmtByKind(kind, value) {
+      if (value === null || value === undefined) return '';
+      if (kind === 'currency') return money(value);
+      if (kind === 'percent') return pct(value);
+      return num(value);
+    }
+
+    function dataLabelOptions(ui, kind, seriesType = 'actual', labelMode = 'last_visible', fixedIndex = null, alignOverride = null, plain = false, anchorOverride = null) {
+      const isGoal = seriesType === 'goal';
+      return {
+        display: (ctx) => {
+          const values = Array.isArray(ctx.dataset.data) ? ctx.dataset.data : [];
+          const v = values[ctx.dataIndex];
+          if (v === null || v === undefined) return false;
+          if (typeof fixedIndex === 'number') return ctx.dataIndex === fixedIndex;
+          if (labelMode === 'all') return true;
+          if (labelMode === 'last_visible') {
+            let last = -1;
+            for (let i = 0; i < values.length; i++) {
+              if (values[i] !== null && values[i] !== undefined) last = i;
+            }
+            return ctx.dataIndex === last;
+          }
+          return true;
+        },
+        anchor: anchorOverride || 'end',
+        align: alignOverride || 'top',
+        color: isGoal ? ui.goal : ui.text,
+        clamp: true,
+        clip: false,
+        offset: 3,
+        padding: 4,
+        borderRadius: 4,
+        backgroundColor: plain ? 'rgba(0,0,0,0)' : (isGoal ? 'rgba(43,118,201,.16)' : ui.card),
+        borderColor: plain ? 'rgba(0,0,0,0)' : (isGoal ? ui.goal : ui.line),
+        borderWidth: plain ? 0 : 1,
+        font: { size: 9, weight: '700' },
+        formatter: (v) => fmtByKind(kind, v)
+      };
+    }
+
+    function quarterStartFromAnchor(anchorIso) {
+      const iso = String(anchorIso || new Date().toISOString().slice(0, 10));
+      const y = Number(iso.slice(0, 4));
+      const m = Number(iso.slice(5, 7));
+      const qStartMonth = Math.floor((m - 1) / 3) * 3 + 1;
+      return new Date(y, qStartMonth - 1, 1);
+    }
+
+    function fallbackQuarterRows(metricKey, sfMetric) {
+      const anchorIso = String((DATA.meta || {}).quarter_anchor_date || new Date().toISOString().slice(0, 10));
+      const currentYm = anchorIso.slice(0, 7);
+      const qStart = quarterStartFromAnchor(anchorIso);
+      const rows = [];
+      for (let i = 0; i < 3; i++) {
+        const d = new Date(qStart.getFullYear(), qStart.getMonth() + i, 1);
+        const monthIso = d.toISOString().slice(0, 7);
+        rows.push({
+          month: monthIso,
+          label: d.toLocaleString('en-US', { month: 'short' }),
+          value: monthIso === currentYm
+            ? Number(sfMetric?.qtd_total ?? sfMetric?.snapshot_value ?? sfMetric?.value ?? 0)
+            : null
+        });
+      }
+      return rows;
+    }
+
+    function setChartState(metricKey, hasData) {
+      const canvas = document.getElementById('c-' + metricKey);
+      if (!canvas) return;
+      const card = canvas.closest('.chart');
+      if (!card) return;
+      if (hasData) card.classList.remove('no-data');
+      else card.classList.add('no-data');
+    }
+
+    function transformedActualSeries(metricKey, rows, sfMetric, currentYm) {
+      if (!rows.length) return [];
+      if (metricKey === 'total_active_pipeline' || sfMetric?.series_mode === 'snapshot') {
+        const snap = Number(sfMetric?.snapshot_value ?? sfMetric?.qtd_total ?? sfMetric?.value ?? 0);
+        return rows.map(r => (r.month <= currentYm ? snap : null));
+      }
+
+      const raw = rows.map(r => Number(r.value || 0));
+      if (sfMetric?.series_mode === 'cumulative') {
+        return rows.map((r, i) => (r.month <= currentYm ? raw[i] : null));
+      }
+
+      let running = 0;
+      return rows.map((r, i) => {
+        if (r.month > currentYm) return null;
+        running += raw[i];
+        return running;
+      });
+    }
+
+    function drawMetric(metricKey, kind) {
+      const sfMetric = (DATA.salesforce || {})[metricKey] || {};
+      let rows = CHART_DATA[metricKey] || [];
+      if (!rows.length) {
+        rows = fallbackQuarterRows(metricKey, sfMetric);
+      }
+      setChartState(metricKey, rows.some(r => r && r.value !== null && r.value !== undefined));
+      if (!rows.length) return;
+      const labels = rows.map(r => r.label);
+      const currentYm = String((DATA.meta || {}).quarter_anchor_date || new Date().toISOString().slice(0,10)).slice(0,7);
+      let currentIndex = -1;
+      rows.forEach((r, i) => { if (r.month <= currentYm) currentIndex = i; });
+      if (currentIndex < 0) currentIndex = 0;
+
+      const actual = transformedActualSeries(metricKey, rows, sfMetric, currentYm);
+      const mode = String(sfMetric?.series_mode || '');
+      const goals = monthlyGoals(metricKey, mode).cumulative;
+      const statuses = actual.map((v, i) => pointStatus(v, goals, i));
+      const ui = chartUi();
+      const colorByStatus = (s) => s === 'green' ? ui.green : (s === 'yellow' ? ui.yellow : (s === 'red' ? ui.red : ui.clear));
+      const isPipeline = metricKey === 'total_active_pipeline';
+      const yMax = isPipeline ? 1000000 : undefined;
+
+      new Chart(document.getElementById('c-' + metricKey), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Actual',
+              data: actual,
+              borderWidth: 3,
+              pointRadius: actual.map(v => v === null ? 0 : 4),
+              pointHoverRadius: actual.map(v => v === null ? 0 : 5),
+              pointHitRadius: 12,
+              pointBackgroundColor: statuses.map(s => colorByStatus(s)),
+              pointBorderColor: statuses.map(s => colorByStatus(s)),
+              segment: { borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) },
+              spanGaps: false,
+              tension: 0.25,
+              fill: false,
+              datalabels: dataLabelOptions(
+                ui,
+                kind,
+                'actual',
+                'last_visible',
+                currentIndex,
+                'left',
+                isPipeline,
+                'center'
+              )
+            },
+            {
+              label: 'Goal',
+              data: goals,
+              borderColor: ui.goal,
+              borderWidth: 2,
+              borderDash: [6,4],
+              pointRadius: goals.map((v, i) => (v === null || i !== currentIndex) ? 0 : 3),
+              pointHoverRadius: goals.map(v => v === null ? 0 : 5),
+              pointHitRadius: 12,
+              pointBackgroundColor: ui.goal,
+              spanGaps: false,
+              tension: 0.15,
+              fill: false,
+              datalabels: dataLabelOptions(
+                ui,
+                kind,
+                'goal',
+                'last_visible',
+                currentIndex,
+                'right',
+                isPipeline,
+                'center'
+              )
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { top: 14, right: 14, left: 16, bottom: 6 } },
+          plugins: {
+            legend: { display: true, labels: { boxWidth: 10, color: ui.text } }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: yMax,
+              grid: { color: ui.grid },
+              ticks: { color: ui.muted, padding: 6, callback: (v) => kind === 'currency' ? money(v) : (kind === 'percent' ? pct(v) : num(v)) }
+            },
+            x: {
+              offset: true,
+              grid: { color: ui.grid },
+              ticks: { color: ui.muted, padding: 6 }
+            }
+          }
+        }
+      });
+    }
+
+    function drawArrHistory() {
+      const labels = ARR_HISTORY.map(p => p.quarter);
+      const values = ARR_HISTORY.map(p => Number(p.value || 0));
+      const ui = chartUi();
+      new Chart(document.getElementById('c-arr_history'), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'ARR (Rolling 365)',
+            data: values,
+            borderColor: ui.arr,
+            borderWidth: 3,
+            pointRadius: 3,
+            pointBackgroundColor: ui.arr,
+            tension: 0.2,
+            fill: false,
+            datalabels: dataLabelOptions(ui, 'currency', 'actual', 'last_visible')
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { top: 14, right: 14, left: 16, bottom: 6 } },
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: { beginAtZero: false, grid: { color: ui.grid }, ticks: { color: ui.muted, padding: 6, callback: (v) => money(v) } },
+            x: { offset: true, grid: { color: ui.grid }, ticks: { color: ui.muted, padding: 6 } }
+          }
+        }
+      });
+    }
+
+    function drawNrrHistory(canvasId, points, label) {
+      const labels = points.map(p => p.quarter);
+      const values = points.map(p => Number(p.value || 0));
+      const currentIndex = Math.max(values.length - 1, 0);
+      const ui = chartUi();
+      const nrrKey = canvasId.includes('customer') ? 'nrr_customer_pct' : 'nrr_dollar_pct';
+      const goalValue = Number(
+        normalizedGoalValues(
+          normalizeGoalEntry(loadGoals()[nrrKey], DEFAULT_GOALS[nrrKey], nrrKey),
+          nrrKey
+        ).quarter_goal || 0
+      );
+      const goalSeries = labels.map(() => goalValue);
+      new Chart(document.getElementById(canvasId), {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label,
+              data: values,
+              borderColor: ui.arr,
+              borderWidth: 3,
+              pointRadius: 3,
+              pointHoverRadius: 5,
+              pointHitRadius: 12,
+              pointBackgroundColor: ui.arr,
+              tension: 0.2,
+              fill: false,
+              datalabels: dataLabelOptions(ui, 'percent', 'actual', 'last_visible', currentIndex, 'left', false, 'center')
+            },
+            {
+              label: 'Goal',
+              data: goalSeries,
+              borderColor: ui.goal,
+              borderWidth: 2,
+              borderDash: [6,4],
+              pointRadius: labels.map((_, i) => i === currentIndex ? 3 : 0),
+              pointHoverRadius: labels.map((_, i) => i === currentIndex ? 5 : 0),
+              pointHitRadius: 12,
+              pointBackgroundColor: ui.goal,
+              tension: 0,
+              fill: false,
+              datalabels: dataLabelOptions(ui, 'percent', 'goal', 'last_visible', currentIndex, 'right', false, 'center')
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { top: 14, right: 14, left: 16, bottom: 6 } },
+          plugins: {
+            legend: { display: true, labels: { boxWidth: 10, color: ui.text } }
+          },
+          scales: {
+            y: { beginAtZero: false, min: 0.6, max: 1.0, grid: { color: ui.grid }, ticks: { color: ui.muted, padding: 6, callback: (v) => pct(v) } },
+            x: { offset: true, grid: { color: ui.grid }, ticks: { color: ui.muted, padding: 6 } }
+          }
+        }
+      });
+    }
+
+    function drawServicesHealthChart() {
+      const services = DATA.services || {};
+      const flagged = Array.isArray(services.projects_over_red_threshold) ? services.projects_over_red_threshold.length : 0;
+      const total = Number(services.active_projects || 0);
+      const healthy = Math.max(total - flagged, 0);
+      const atRisk = Math.max(flagged, 0);
+      const ui = chartUi();
+      new Chart(document.getElementById('c-svc-health'), {
+        type: 'doughnut',
+        data: {
+          labels: ['Healthy', 'At Risk'],
+          datasets: [{
+            data: (healthy + atRisk) > 0 ? [healthy, atRisk] : [1, 0],
+            backgroundColor: [ui.green, ui.red],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '68%',
+          plugins: {
+            legend: { position: 'bottom', labels: { color: ui.text, boxWidth: 10 } },
+            datalabels: {
+              color: ui.text,
+              formatter: (v, ctx) => ctx.dataIndex === 0 ? num(v) : (v ? num(v) : ''),
+              font: { size: 10, weight: '700' }
+            }
+          }
+        }
+      });
+    }
+
+    function loadCsContent() {
+      try {
+        const raw = localStorage.getItem(CS_CONTENT_KEY)
+          || localStorage.getItem('dashboard_cs_content_shared_v1')
+          || localStorage.getItem('dashboard_cs_content_v1');
+        if (!raw) return { quote_text: '', quote_name: '', quote_org: '', billing_progress: '' };
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return { quote_text: '', quote_name: '', quote_org: '', billing_progress: '' };
+        return {
+          quote_text: String(parsed.quote_text || ''),
+          quote_name: String(parsed.quote_name || ''),
+          quote_org: String(parsed.quote_org || ''),
+          billing_progress: String(parsed.billing_progress || '')
+        };
+      } catch (e) {
+        return { quote_text: '', quote_name: '', quote_org: '', billing_progress: '' };
+      }
+    }
+
+    function saveCsContent(content) {
+      localStorage.setItem(CS_CONTENT_KEY, JSON.stringify(content));
+      localStorage.setItem('dashboard_cs_content_shared_v1', JSON.stringify(content));
+      localStorage.setItem('dashboard_cs_content_v1', JSON.stringify(content));
+    }
+
+    function loadMilestones() {
+      try {
+        const raw = localStorage.getItem(MILESTONE_KEY);
+        if (!raw) return DEFAULT_MILESTONES;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return DEFAULT_MILESTONES;
+        return parsed;
+      } catch (e) {
+        return DEFAULT_MILESTONES;
+      }
+    }
+
+    function saveMilestones(items) {
+      localStorage.setItem(MILESTONE_KEY, JSON.stringify(items));
+    }
+
+    function milestoneStatus(item) {
+      if (item.completed) return { cls: 'b-green', label: 'Complete' };
+      if (!item.due_date) return { cls: 'b-green', label: 'On Track' };
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const due = new Date(item.due_date + 'T00:00:00');
+      const diffDays = Math.floor((due - today) / 86400000);
+      if (diffDays < 0) return { cls: 'b-red', label: 'Past Due' };
+      if (diffDays <= 7) return { cls: 'b-yellow', label: 'Due Soon' };
+      return { cls: 'b-green', label: 'On Track' };
+    }
+
+    function renderMilestones() {
+      const body = document.getElementById('milestone-body');
+      const items = loadMilestones();
+      body.innerHTML = items.map((item, idx) => {
+        const status = milestoneStatus(item);
+        const title = String(item.title || '').replace(/"/g, '&quot;');
+        const due = String(item.due_date || '');
+        return `<tr>`
+          + `<td class="edit-only"><input type="checkbox" data-ms="selected" data-i="${idx}" ${item.selected ? 'checked' : ''} /></td>`
+          + `<td><input type="text" data-ms="title" data-i="${idx}" value="${title}" /></td>`
+          + `<td><input type="date" data-ms="due_date" data-i="${idx}" value="${due}" /></td>`
+          + `<td><input type="checkbox" data-ms="completed" data-i="${idx}" ${item.completed ? 'checked' : ''} /></td>`
+          + `<td><span class="badge ${status.cls}">${status.label}</span></td>`
+          + `</tr>`;
+      }).join('');
+    }
+
+    const sf = DATA.salesforce || {};
+    const dash = DATA.dashboard || {};
+    const services = DATA.services || {};
+    const todayEl = document.getElementById('today-date');
+    if (todayEl) {
+      todayEl.textContent = 'Dashboard Date: ' + new Date().toLocaleDateString();
+    }
+    const refreshEl = document.getElementById('last-refresh');
+    if (refreshEl) {
+      refreshEl.textContent = 'Last Refreshed: ' + GENERATED_AT;
+    }
+    document.getElementById('k-arr').textContent = money((dash.arr || {}).value || (sf.arr || {}).value || 0);
+    document.getElementById('k-new-customers').textContent = num((sf.new_customers || {}).qtd_total || 0);
+    document.getElementById('k-nrr-c').textContent = pct((dash.nrr_customer_pct || {}).value || (sf.nrr_customer_pct || {}).value || 0);
+    document.getElementById('k-nrr-d').textContent = pct((dash.nrr_dollar_pct || {}).value || (sf.nrr_dollar_pct || {}).value || 0);
+    document.getElementById('k-lost').textContent = num((sf.lost_customers || {}).value || 0);
+    document.getElementById('k-svc-active').textContent = num(services.active_projects || 0);
+    document.getElementById('k-svc-closed').textContent = num(services.closed_projects_this_quarter || 0);
+    document.getElementById('k-svc-avg').textContent = num(Math.round(Number(services.avg_project_close_days_this_quarter || 0)));
+    const svcStatus = String(services.overall_project_status || 'green').toLowerCase();
+    const svcBadge = svcStatus === 'red' ? '<span class="badge b-red">Red</span>' : '<span class="badge b-green">Green</span>';
+    document.getElementById('k-svc-status').innerHTML = svcBadge;
+    const warningEl = document.getElementById('k-svc-warning');
+    const flagged = Array.isArray(services.projects_over_red_threshold) ? services.projects_over_red_threshold : [];
+    if (flagged.length) {
+      warningEl.textContent = 'Attention: ' + flagged.map(x => `${x.project} (${num(x.red_items)} red items)`).join(', ');
+    } else {
+      warningEl.textContent = 'All tracked projects are under red-item threshold.';
+    }
+    drawServicesHealthChart();
+
+    const lostBody = document.getElementById('lost-body');
+    const lostRows = (sf.lost_customers || {}).accounts || [];
+    if (!lostRows.length) {
+      lostBody.innerHTML = '<tr><td>None</td></tr>';
+    } else {
+      lostBody.innerHTML = lostRows.map(r => `<tr><td>${r.account_name || ''}</td></tr>`).join('');
+    }
+
+    const csContent = loadCsContent();
+    const quoteText = document.getElementById('quote-text');
+    const quoteName = document.getElementById('quote-name');
+    const quoteOrg = document.getElementById('quote-org');
+    const quoteViewText = document.getElementById('quote-view-text');
+    const quoteViewMeta = document.getElementById('quote-view-meta');
+    const billingProgress = document.getElementById('billing-progress');
+    if (quoteText) quoteText.value = csContent.quote_text;
+    if (quoteName) quoteName.value = csContent.quote_name;
+    if (quoteOrg) quoteOrg.value = csContent.quote_org;
+    if (billingProgress) billingProgress.value = csContent.billing_progress;
+    if (quoteViewText) quoteViewText.textContent = csContent.quote_text || 'None';
+    if (quoteViewMeta) {
+      const metaBits = [csContent.quote_name, csContent.quote_org].filter(Boolean);
+      quoteViewMeta.textContent = metaBits.length ? ('- ' + metaBits.join(' @ ')) : '';
+    }
+    const billingGoal = Number(normalizeGoalEntry(loadGoals().qtd_billing_progress, DEFAULT_GOALS.qtd_billing_progress, 'qtd_billing_progress').quarter_goal || 0);
+    const goalEl = document.getElementById('billing-goal');
+    if (goalEl) goalEl.textContent = money(billingGoal);
+    const progressNum = Number(String(csContent.billing_progress || '0').replace(/[^0-9.-]/g, '')) || 0;
+    const pctEl = document.getElementById('billing-pct');
+    if (pctEl) {
+      const ratio = billingGoal > 0 ? (progressNum / billingGoal) : 0;
+      pctEl.textContent = money(progressNum) + ' (' + (ratio * 100).toFixed(1) + '%)';
+    }
+    // On owner view, normalize persisted content keys so team view can read the same payload.
+    if (!VIEW_ONLY) {
+      saveCsContent({
+        quote_text: csContent.quote_text || '',
+        quote_name: csContent.quote_name || '',
+        quote_org: csContent.quote_org || '',
+        billing_progress: csContent.billing_progress || ''
+      });
+    }
+
+    drawMetric('new_sales', 'currency');
+    drawMetric('total_active_pipeline', 'currency');
+    drawMetric('new_customers', 'count');
+    drawMetric('sql', 'count');
+    drawMetric('mql', 'count');
+    drawMetric('renewals_number', 'currency');
+    drawArrHistory();
+    drawNrrHistory('c-nrr_customer_history', NRR_CUSTOMER_HISTORY, 'NRR by Customer');
+    drawNrrHistory('c-nrr_dollar_history', NRR_DOLLAR_HISTORY, 'NRR by Dollar');
+    renderMilestones();
+
+    let milestoneEditMode = false;
+    function setMilestoneEditMode(enabled) {
+      milestoneEditMode = !!enabled;
+      document.querySelectorAll('.edit-only').forEach(el => {
+        if (el.tagName === 'TH' || el.tagName === 'TD') {
+          el.style.display = milestoneEditMode ? '' : 'none';
+        } else {
+          el.style.display = milestoneEditMode ? 'inline-block' : 'none';
+        }
+      });
+      const editBtn = document.getElementById('edit-milestones');
+      if (editBtn) editBtn.textContent = milestoneEditMode ? 'Done' : 'Edit';
+    }
+
+    const editMilestonesBtn = document.getElementById('edit-milestones');
+    if (editMilestonesBtn) {
+      editMilestonesBtn.onclick = () => setMilestoneEditMode(!milestoneEditMode);
+    }
+
+    const addMilestoneBtn = document.getElementById('add-milestone');
+    if (addMilestoneBtn) {
+      addMilestoneBtn.onclick = () => {
+        const items = loadMilestones();
+        items.push({ title: '', due_date: '', completed: false, selected: false });
+        saveMilestones(items);
+        renderMilestones();
+        setMilestoneEditMode(milestoneEditMode);
+      };
+    }
+
+    document.getElementById('milestone-body')?.addEventListener('change', (e) => {
+      const t = e.target;
+      const idx = Number(t.getAttribute('data-i'));
+      const key = t.getAttribute('data-ms');
+      if (!Number.isFinite(idx) || !key) return;
+      const items = loadMilestones();
+      if (!items[idx]) return;
+      if (key === 'completed') {
+        items[idx].completed = !!t.checked;
+      } else if (key === 'selected') {
+        items[idx].selected = !!t.checked;
+      } else {
+        items[idx][key] = t.value;
+      }
+      saveMilestones(items);
+      renderMilestones();
+      setMilestoneEditMode(milestoneEditMode);
+    });
+
+    const removeBtn = document.getElementById('remove-milestones');
+    if (removeBtn) {
+      removeBtn.onclick = () => {
+        const items = loadMilestones();
+        const kept = items.filter(i => !i.selected);
+        saveMilestones(kept.map(i => ({ ...i, selected: false })));
+        renderMilestones();
+        setMilestoneEditMode(milestoneEditMode);
+      };
+    }
+
+    const handleCsContentUpdate = () => {
+      saveCsContent({
+        quote_text: quoteText?.value || '',
+        quote_name: quoteName?.value || '',
+        quote_org: quoteOrg?.value || '',
+        billing_progress: billingProgress?.value || ''
+      });
+      const newProgress = Number(String(billingProgress?.value || '0').replace(/[^0-9.-]/g, '')) || 0;
+      const ratio = billingGoal > 0 ? (newProgress / billingGoal) : 0;
+      if (pctEl) pctEl.textContent = money(newProgress) + ' (' + (ratio * 100).toFixed(1) + '%)';
+      if (quoteViewText) quoteViewText.textContent = quoteText?.value || 'None';
+      if (quoteViewMeta) {
+        const metaBits = [quoteName?.value || '', quoteOrg?.value || ''].filter(Boolean);
+        quoteViewMeta.textContent = metaBits.length ? ('- ' + metaBits.join(' @ ')) : '';
+      }
+    };
+    [quoteText, quoteName, quoteOrg, billingProgress].forEach((el) => {
+      if (!el) return;
+      el.addEventListener('change', handleCsContentUpdate);
+      el.addEventListener('input', handleCsContentUpdate);
+    });
+
+    function applyViewMode() {
+      if (!VIEW_ONLY) return;
+      const goalsLink = document.querySelector('a[href="goals_admin.html"]');
+      if (goalsLink) goalsLink.remove();
+      const editBtn = document.getElementById('edit-milestones');
+      const addBtn = document.getElementById('add-milestone');
+      const removeBtn = document.getElementById('remove-milestones');
+      if (editBtn) editBtn.style.display = 'none';
+      if (addBtn) addBtn.style.display = 'none';
+      if (removeBtn) removeBtn.style.display = 'none';
+      document.querySelectorAll('#milestone-body input').forEach(el => {
+        el.disabled = true;
+      });
+      // Team view stays read-only.
+      [quoteText, quoteName, quoteOrg, billingProgress].forEach(el => {
+        if (!el) return;
+        el.readOnly = true;
+        el.disabled = true;
+      });
+    }
+
+    setMilestoneEditMode(false);
+    applyViewMode();
+
+    const toggle = document.getElementById('theme-toggle');
+    if (toggle) {
+      toggle.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? 'Light Mode' : 'Dark Mode';
+      toggle.onclick = () => {
+        const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        localStorage.setItem(THEME_KEY, next);
+        document.documentElement.setAttribute('data-theme', next);
+        location.reload();
+      };
+    }
+  </script>
+</body>
+</html>
