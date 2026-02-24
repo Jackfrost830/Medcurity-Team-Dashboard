@@ -750,6 +750,12 @@ def main() -> None:
       const ui = chartUi();
       const colorByStatus = (s) => s === 'green' ? ui.green : (s === 'yellow' ? ui.yellow : (s === 'red' ? ui.red : ui.clear));
       const isPipeline = metricKey === 'total_active_pipeline';
+      const isNewSales = metricKey === 'new_sales';
+      const actualPointRadius = isNewSales ? 5 : 4;
+      const actualPointHoverRadius = isNewSales ? 7 : 6;
+      const actualPointHitRadius = isNewSales ? 7 : 4;
+      const goalPointHoverRadius = isNewSales ? 7 : 6;
+      const goalPointHitRadius = isNewSales ? 7 : 4;
       let yMax = isPipeline ? 1000000 : undefined;
       if (metricKey === 'sql') {{
         const top = Math.max(
@@ -772,9 +778,9 @@ def main() -> None:
               label: 'Actual',
               data: actual,
               borderWidth: 3,
-              pointRadius: actual.map(v => v === null ? 0 : 4),
-              pointHoverRadius: actual.map(v => v === null ? 0 : 6),
-              pointHitRadius: 4,
+              pointRadius: actual.map(v => v === null ? 0 : actualPointRadius),
+              pointHoverRadius: actual.map(v => v === null ? 0 : actualPointHoverRadius),
+              pointHitRadius: actualPointHitRadius,
               pointBackgroundColor: statuses.map(s => colorByStatus(s)),
               pointBorderColor: statuses.map(s => colorByStatus(s)),
               segment: {{ borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) }},
@@ -799,8 +805,8 @@ def main() -> None:
               borderWidth: 2,
               borderDash: [6,4],
               pointRadius: goals.map((v, i) => (v === null || i !== currentIndex) ? 0 : 3),
-              pointHoverRadius: goals.map(v => v === null ? 0 : 6),
-              pointHitRadius: 4,
+              pointHoverRadius: goals.map(v => v === null ? 0 : goalPointHoverRadius),
+              pointHitRadius: goalPointHitRadius,
               pointBackgroundColor: ui.goal,
               spanGaps: false,
               tension: 0.15,

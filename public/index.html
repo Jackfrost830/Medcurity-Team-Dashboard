@@ -248,7 +248,7 @@
     const ARR_HISTORY = [{"quarter": "Q2-2024", "value": 920441.25}, {"quarter": "Q3-2024", "value": 941425.5}, {"quarter": "Q4-2024", "value": 957989.0}, {"quarter": "Q1-2025", "value": 973958.55005}, {"quarter": "Q2-2025", "value": 991001.15005}, {"quarter": "Q3-2025", "value": 1003099.65005}, {"quarter": "Q4-2025", "value": 1005173.65088}, {"quarter": "Q1-2026", "value": 1053498.40088}];
     const NRR_DOLLAR_HISTORY = [{"quarter": "Q1-2025", "value": 0.8792408210768073}, {"quarter": "Q2-2025", "value": 0.8413659273760765}, {"quarter": "Q3-2025", "value": 0.9333100067635891}, {"quarter": "Q4-2025", "value": 0.8400561472863652}, {"quarter": "Q1-2026", "value": 0.9407185621280181}];
     const NRR_CUSTOMER_HISTORY = [{"quarter": "Q1-2025", "value": 0.8620689655172413}, {"quarter": "Q2-2025", "value": 0.7441860465116279}, {"quarter": "Q3-2025", "value": 0.9130434782608696}, {"quarter": "Q4-2025", "value": 0.8771929824561404}, {"quarter": "Q1-2026", "value": 0.8864628820960698}];
-    const GENERATED_AT = "2026-02-24 19:41 UTC";
+    const GENERATED_AT = "2026-02-24 19:47 UTC";
     const CURRENT_QUARTER = "Q1-2026";
     const VIEW_ONLY = true;
     if (VIEW_ONLY) document.documentElement.classList.add('view-only');
@@ -558,6 +558,12 @@
       const ui = chartUi();
       const colorByStatus = (s) => s === 'green' ? ui.green : (s === 'yellow' ? ui.yellow : (s === 'red' ? ui.red : ui.clear));
       const isPipeline = metricKey === 'total_active_pipeline';
+      const isNewSales = metricKey === 'new_sales';
+      const actualPointRadius = isNewSales ? 5 : 4;
+      const actualPointHoverRadius = isNewSales ? 7 : 6;
+      const actualPointHitRadius = isNewSales ? 7 : 4;
+      const goalPointHoverRadius = isNewSales ? 7 : 6;
+      const goalPointHitRadius = isNewSales ? 7 : 4;
       let yMax = isPipeline ? 1000000 : undefined;
       if (metricKey === 'sql') {
         const top = Math.max(
@@ -580,9 +586,9 @@
               label: 'Actual',
               data: actual,
               borderWidth: 3,
-              pointRadius: actual.map(v => v === null ? 0 : 4),
-              pointHoverRadius: actual.map(v => v === null ? 0 : 6),
-              pointHitRadius: 4,
+              pointRadius: actual.map(v => v === null ? 0 : actualPointRadius),
+              pointHoverRadius: actual.map(v => v === null ? 0 : actualPointHoverRadius),
+              pointHitRadius: actualPointHitRadius,
               pointBackgroundColor: statuses.map(s => colorByStatus(s)),
               pointBorderColor: statuses.map(s => colorByStatus(s)),
               segment: { borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) },
@@ -607,8 +613,8 @@
               borderWidth: 2,
               borderDash: [6,4],
               pointRadius: goals.map((v, i) => (v === null || i !== currentIndex) ? 0 : 3),
-              pointHoverRadius: goals.map(v => v === null ? 0 : 6),
-              pointHitRadius: 4,
+              pointHoverRadius: goals.map(v => v === null ? 0 : goalPointHoverRadius),
+              pointHitRadius: goalPointHitRadius,
               pointBackgroundColor: ui.goal,
               spanGaps: false,
               tension: 0.15,
