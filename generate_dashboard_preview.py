@@ -826,11 +826,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'index', axis: 'x', intersect: false }},
+          interaction: {{ mode: 'point', intersect: true }},
           layout: {{ padding: layoutPadding }},
           plugins: {{
             legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }},
-            tooltip: {{ mode: 'index', axis: 'x', intersect: false }}
+            tooltip: {{ mode: 'point', intersect: true }}
           }},
           scales: {{
             y: {{
@@ -874,11 +874,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'index', axis: 'x', intersect: false }},
+          interaction: {{ mode: 'point', intersect: true }},
           layout: {{ padding: {{ top: 14, right: 14, left: 16, bottom: 6 }} }},
           plugins: {{
             legend: {{ display: false }},
-            tooltip: {{ mode: 'index', axis: 'x', intersect: false }}
+            tooltip: {{ mode: 'point', intersect: true }}
           }},
           scales: {{
             y: {{ beginAtZero: false, grid: {{ color: ui.grid }}, ticks: {{ color: ui.muted, padding: 6, callback: (v) => money(v) }} }},
@@ -941,11 +941,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'index', axis: 'x', intersect: false }},
+          interaction: {{ mode: 'point', intersect: true }},
           layout: {{ padding: {{ top: 14, right: 14, left: 16, bottom: 6 }} }},
           plugins: {{
             legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }},
-            tooltip: {{ mode: 'index', axis: 'x', intersect: false }}
+            tooltip: {{ mode: 'point', intersect: true }}
           }},
           scales: {{
             y: {{ beginAtZero: false, min: 0.6, max: 1.0, grid: {{ color: ui.grid }}, ticks: {{ color: ui.muted, padding: 6, callback: (v) => pct(v) }} }},
