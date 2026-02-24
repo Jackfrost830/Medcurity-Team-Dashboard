@@ -7,3 +7,4 @@ __pycache__/
 dashboard_metrics_output.json
 dashboard_config.json
 *.xlsx
+Install dependencies
