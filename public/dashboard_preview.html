@@ -248,7 +248,7 @@
     const ARR_HISTORY = [{"quarter": "Q2-2024", "value": 920441.25}, {"quarter": "Q3-2024", "value": 941425.5}, {"quarter": "Q4-2024", "value": 957989.0}, {"quarter": "Q1-2025", "value": 973958.55005}, {"quarter": "Q2-2025", "value": 991001.15005}, {"quarter": "Q3-2025", "value": 1003099.65005}, {"quarter": "Q4-2025", "value": 1005173.65088}, {"quarter": "Q1-2026", "value": 1053498.40088}];
     const NRR_DOLLAR_HISTORY = [{"quarter": "Q1-2025", "value": 0.8792408210768073}, {"quarter": "Q2-2025", "value": 0.8413659273760765}, {"quarter": "Q3-2025", "value": 0.9333100067635891}, {"quarter": "Q4-2025", "value": 0.8400561472863652}, {"quarter": "Q1-2026", "value": 0.9437845373561741}];
     const NRR_CUSTOMER_HISTORY = [{"quarter": "Q1-2025", "value": 0.8620689655172413}, {"quarter": "Q2-2025", "value": 0.7441860465116279}, {"quarter": "Q3-2025", "value": 0.9130434782608696}, {"quarter": "Q4-2025", "value": 0.8771929824561404}, {"quarter": "Q1-2026", "value": 0.8913043478260869}];
-    const GENERATED_AT = "2026-02-24 06:51 UTC";
+    const GENERATED_AT = "2026-02-24 06:58 UTC";
     const CURRENT_QUARTER = "Q1-2026";
     const VIEW_ONLY = false;
     if (VIEW_ONLY) document.documentElement.classList.add('view-only');
@@ -275,12 +275,17 @@
         return { quarter_goal: 800000, month_goals: [800000, 800000, 800000] };
       }
       if (Array.isArray(raw)) {
-        const month = raw.map(x => Number(x || 0));
-        return { quarter_goal: month.reduce((a, b) => a + b, 0), month_goals: month };
+        const splits = raw.map(x => Number(x || 0));
+        return { quarter_goal: splits.reduce((a, b) => a + b, 0), month_goals: [null, null, null], month_splits: splits };
       }
       const src = raw && typeof raw === 'object' ? raw : fallback;
       const quarter_goal = Number(src?.quarter_goal ?? fallback.quarter_goal ?? 0);
       const month_goals = (src?.month_goals || src?.splits || fallback.month_goals || [null, null, null]).map(v => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      });
+      const month_splits = (src?.month_splits || [null, null, null]).map(v => {
         if (v === null || v === undefined || v === '') return null;
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
@@ -290,7 +295,7 @@
         if (v === null || v === undefined) return v;
         return Number(v) > 1 ? Number(v) / 100 : Number(v);
       };
-      return { quarter_goal, month_goals };
+      return { quarter_goal, month_goals, month_splits };
     }
 
     function normalizedGoalValues(entry, metricKey) {
@@ -298,9 +303,11 @@
       if (!isPct) return entry;
       const q = Number(entry?.quarter_goal || 0);
       const m = Array.isArray(entry?.month_goals) ? entry.month_goals : [null, null, null];
+      const s = Array.isArray(entry?.month_splits) ? entry.month_splits : [null, null, null];
       return {
         quarter_goal: q > 1 ? q / 100 : q,
-        month_goals: m.map(v => (v === null || v === undefined) ? null : (Number(v) > 1 ? Number(v) / 100 : Number(v)))
+        month_goals: m.map(v => (v === null || v === undefined) ? null : (Number(v) > 1 ? Number(v) / 100 : Number(v))),
+        month_splits: s.map(v => (v === null || v === undefined) ? null : (Number(v) > 1 ? Number(v) / 100 : Number(v)))
       };
     }
 
@@ -369,29 +376,36 @@
         const v = Number((g.month_goals && g.month_goals[0]) || g.quarter_goal || 800000);
         return { monthly: [v, v, v], cumulative: [v, v, v] };
       }
-      const cum = [...(g.month_goals || [null, null, null])];
       const targetQuarter = Number(g.quarter_goal || 0);
-      cum[2] = (cum[2] === null || cum[2] === undefined) ? targetQuarter : Number(cum[2] || 0);
-      cum[2] = targetQuarter;
-
-      if (cum[0] === null && cum[1] === null) {
-        cum[0] = cum[2] / 3;
-        cum[1] = (cum[2] * 2) / 3;
-      } else if (cum[0] !== null && cum[1] === null) {
-        cum[1] = (Number(cum[0]) + Number(cum[2])) / 2;
-      } else if (cum[0] === null && cum[1] !== null) {
-        cum[0] = Number(cum[1]) / 2;
+      let splits = [...(g.month_splits || [null, null, null])];
+      const legacyCum = [...(g.month_goals || [null, null, null])];
+      const hasSplits = splits.some(v => v !== null && v !== undefined);
+      if (!hasSplits && legacyCum.some(v => v !== null && v !== undefined)) {
+        const c0 = Number(legacyCum[0] || 0);
+        const c1 = Number(legacyCum[1] || c0);
+        const c2 = Number(legacyCum[2] || targetQuarter || c1);
+        splits = [c0, Math.max(c1 - c0, 0), Math.max(c2 - c1, 0)];
       }
 
-      cum[0] = Number(cum[0] || 0);
-      cum[1] = Number(cum[1] || 0);
-      cum[2] = Number(cum[2] || 0);
-      if (cum[1] < cum[0]) cum[1] = cum[0];
-      if (cum[2] < cum[1]) cum[2] = cum[1];
-
-      const monthly = [cum[0], cum[1] - cum[0], cum[2] - cum[1]];
+      if (splits.every(v => v === null || v === undefined)) {
+        const each = targetQuarter / 3;
+        splits = [each, each, each];
+      } else {
+        splits = splits.map(v => (v === null || v === undefined) ? null : Number(v || 0));
+        const remainingAfterM1 = Math.max(targetQuarter - Number(splits[0] || 0), 0);
+        const remainingAfterM2 = Math.max(targetQuarter - Number(splits[0] || 0) - Number(splits[1] || 0), 0);
+        if (splits[0] === null) splits[0] = targetQuarter / 3;
+        if (splits[1] === null) splits[1] = remainingAfterM1 / 2;
+        if (splits[2] === null) splits[2] = remainingAfterM2;
+      }
+      splits = splits.map(v => Number(v || 0));
+      const splitSum = splits[0] + splits[1] + splits[2];
+      if (Math.abs(splitSum - targetQuarter) > 0.0001) {
+        splits[2] += (targetQuarter - splitSum);
+      }
+      const cum = [splits[0], splits[0] + splits[1], splits[0] + splits[1] + splits[2]];
       return {
-        monthly,
+        monthly: splits,
         cumulative: [cum[0], cum[1], cum[2]]
       };
     }

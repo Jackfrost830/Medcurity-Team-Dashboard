@@ -467,12 +467,17 @@ def main() -> None:
         return {{ quarter_goal: 800000, month_goals: [800000, 800000, 800000] }};
       }}
       if (Array.isArray(raw)) {{
-        const month = raw.map(x => Number(x || 0));
-        return {{ quarter_goal: month.reduce((a, b) => a + b, 0), month_goals: month }};
+        const splits = raw.map(x => Number(x || 0));
+        return {{ quarter_goal: splits.reduce((a, b) => a + b, 0), month_goals: [null, null, null], month_splits: splits }};
       }}
       const src = raw && typeof raw === 'object' ? raw : fallback;
       const quarter_goal = Number(src?.quarter_goal ?? fallback.quarter_goal ?? 0);
       const month_goals = (src?.month_goals || src?.splits || fallback.month_goals || [null, null, null]).map(v => {{
+        if (v === null || v === undefined || v === '') return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      }});
+      const month_splits = (src?.month_splits || [null, null, null]).map(v => {{
         if (v === null || v === undefined || v === '') return null;
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
@@ -482,7 +487,7 @@ def main() -> None:
         if (v === null || v === undefined) return v;
         return Number(v) > 1 ? Number(v) / 100 : Number(v);
       }};
-      return {{ quarter_goal, month_goals }};
+      return {{ quarter_goal, month_goals, month_splits }};
     }}
 
     function normalizedGoalValues(entry, metricKey) {{
@@ -490,9 +495,11 @@ def main() -> None:
       if (!isPct) return entry;
       const q = Number(entry?.quarter_goal || 0);
       const m = Array.isArray(entry?.month_goals) ? entry.month_goals : [null, null, null];
+      const s = Array.isArray(entry?.month_splits) ? entry.month_splits : [null, null, null];
       return {{
         quarter_goal: q > 1 ? q / 100 : q,
-        month_goals: m.map(v => (v === null || v === undefined) ? null : (Number(v) > 1 ? Number(v) / 100 : Number(v)))
+        month_goals: m.map(v => (v === null || v === undefined) ? null : (Number(v) > 1 ? Number(v) / 100 : Number(v))),
+        month_splits: s.map(v => (v === null || v === undefined) ? null : (Number(v) > 1 ? Number(v) / 100 : Number(v)))
       }};
     }}
 
@@ -561,29 +568,36 @@ def main() -> None:
         const v = Number((g.month_goals && g.month_goals[0]) || g.quarter_goal || 800000);
         return {{ monthly: [v, v, v], cumulative: [v, v, v] }};
       }}
-      const cum = [...(g.month_goals || [null, null, null])];
       const targetQuarter = Number(g.quarter_goal || 0);
-      cum[2] = (cum[2] === null || cum[2] === undefined) ? targetQuarter : Number(cum[2] || 0);
-      cum[2] = targetQuarter;
-
-      if (cum[0] === null && cum[1] === null) {{
-        cum[0] = cum[2] / 3;
-        cum[1] = (cum[2] * 2) / 3;
-      }} else if (cum[0] !== null && cum[1] === null) {{
-        cum[1] = (Number(cum[0]) + Number(cum[2])) / 2;
-      }} else if (cum[0] === null && cum[1] !== null) {{
-        cum[0] = Number(cum[1]) / 2;
+      let splits = [...(g.month_splits || [null, null, null])];
+      const legacyCum = [...(g.month_goals || [null, null, null])];
+      const hasSplits = splits.some(v => v !== null && v !== undefined);
+      if (!hasSplits && legacyCum.some(v => v !== null && v !== undefined)) {{
+        const c0 = Number(legacyCum[0] || 0);
+        const c1 = Number(legacyCum[1] || c0);
+        const c2 = Number(legacyCum[2] || targetQuarter || c1);
+        splits = [c0, Math.max(c1 - c0, 0), Math.max(c2 - c1, 0)];
       }}
 
-      cum[0] = Number(cum[0] || 0);
-      cum[1] = Number(cum[1] || 0);
-      cum[2] = Number(cum[2] || 0);
-      if (cum[1] < cum[0]) cum[1] = cum[0];
-      if (cum[2] < cum[1]) cum[2] = cum[1];
-
-      const monthly = [cum[0], cum[1] - cum[0], cum[2] - cum[1]];
+      if (splits.every(v => v === null || v === undefined)) {{
+        const each = targetQuarter / 3;
+        splits = [each, each, each];
+      }} else {{
+        splits = splits.map(v => (v === null || v === undefined) ? null : Number(v || 0));
+        const remainingAfterM1 = Math.max(targetQuarter - Number(splits[0] || 0), 0);
+        const remainingAfterM2 = Math.max(targetQuarter - Number(splits[0] || 0) - Number(splits[1] || 0), 0);
+        if (splits[0] === null) splits[0] = targetQuarter / 3;
+        if (splits[1] === null) splits[1] = remainingAfterM1 / 2;
+        if (splits[2] === null) splits[2] = remainingAfterM2;
+      }}
+      splits = splits.map(v => Number(v || 0));
+      const splitSum = splits[0] + splits[1] + splits[2];
+      if (Math.abs(splitSum - targetQuarter) > 0.0001) {{
+        splits[2] += (targetQuarter - splitSum);
+      }}
+      const cum = [splits[0], splits[0] + splits[1], splits[0] + splits[1] + splits[2]];
       return {{
-        monthly,
+        monthly: splits,
         cumulative: [cum[0], cum[1], cum[2]]
       }};
     }}
@@ -1334,7 +1348,6 @@ def main() -> None:
       new_sales:'New Sales',
       total_active_pipeline:'Total Active Pipeline',
       new_customers:'New Customers',
-      arr:'ARR',
       sql:'SQL',
       mql:'MQL',
       renewals_number:'Renewals',
@@ -1370,7 +1383,7 @@ def main() -> None:
       }}
       if (Array.isArray(raw)) {{
         const monthly = raw.map(x => Number(x || 0));
-        return {{ quarter_goal: monthly.reduce((a,b)=>a+b,0), month_goals: monthly }};
+        return {{ quarter_goal: monthly.reduce((a,b)=>a+b,0), month_goals: [null, null, null], month_splits: monthly }};
       }}
       const src = raw && typeof raw === 'object' ? raw : fallback;
       const month_goals = (src?.month_goals || src?.splits || fallback.month_goals || [null, null, null]).map(v => {{
@@ -1378,9 +1391,15 @@ def main() -> None:
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
       }});
+      const month_splits = (src?.month_splits || [null, null, null]).map(v => {{
+        if (v === null || v === undefined || v === '') return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      }});
       return {{
         quarter_goal: Number(src?.quarter_goal ?? fallback.quarter_goal ?? 0),
-        month_goals
+        month_goals,
+        month_splits
       }};
     }}
 
@@ -1430,6 +1449,16 @@ def main() -> None:
       HISTORY_DATA.forEach(row => {{ if (row && row.quarter) set.add(String(row.quarter)); }});
       const store = loadGoalStore();
       Object.keys(store).forEach(q => set.add(q));
+      const cm = /^Q([1-4])-(\\d{{4}})$/.exec(String(CURRENT_QUARTER || ''));
+      if (cm) {{
+        let q = Number(cm[1]);
+        let y = Number(cm[2]);
+        for (let i = 0; i < 6; i++) {{
+          set.add(`Q${{q}}-${{y}}`);
+          q += 1;
+          if (q > 4) {{ q = 1; y += 1; }}
+        }}
+      }}
       const parseQuarter = (q) => {{
         const m = /^Q([1-4])-(\\d{{4}})$/.exec(String(q || ''));
         if (!m) return [0, 0];
@@ -1454,9 +1483,16 @@ def main() -> None:
       form.innerHTML = Object.keys(LABELS).map(key => {{
         const g = goals[key] || DEFAULT_GOALS[key];
         const locked = key === 'total_active_pipeline';
-        const m0 = g.month_goals?.[0];
-        const m1 = g.month_goals?.[1];
-        const m2 = g.month_goals?.[2];
+        let m0 = g.month_splits?.[0];
+        let m1 = g.month_splits?.[1];
+        let m2 = g.month_splits?.[2];
+        if ((m0 === null || m0 === undefined) && (m1 === null || m1 === undefined) && (m2 === null || m2 === undefined)) {{
+          const qGoal = Number(g.quarter_goal || 0);
+          if (qGoal > 0) {{
+            const each = qGoal / 3;
+            m0 = each; m1 = each; m2 = each;
+          }}
+        }}
         const ro = locked ? 'readonly' : '';
         return `<div class=\"row\">`
           + `<div><strong>${{LABELS[key]}}</strong></div>`
@@ -1466,6 +1502,21 @@ def main() -> None:
           + `<input data-k=\"${{key}}\" data-f=\"month_goal\" data-i=\"2\" value=\"${{m2 === null || m2 === undefined ? '' : m2}}\" ${{ro}} />`
           + `</div>`;
       }}).join('');
+
+      const applyEvenSplit = (goalInput) => {{
+        const key = goalInput.getAttribute('data-k');
+        const qGoal = Number(goalInput.value || 0);
+        if (!Number.isFinite(qGoal)) return;
+        const inputs = Array.from(document.querySelectorAll(`input[data-k=\"${{key}}\"][data-f=\"month_goal\"]`));
+        if (inputs.length !== 3) return;
+        const allBlank = inputs.every(inp => String(inp.value || '').trim() === '');
+        if (!allBlank) return;
+        const each = qGoal / 3;
+        inputs.forEach(inp => inp.value = each ? String(Math.round(each * 100) / 100) : '');
+      }};
+      document.querySelectorAll('input[data-f=\"quarter_goal\"]').forEach(inp => {{
+        inp.addEventListener('change', () => applyEvenSplit(inp));
+      }});
     }}
 
     function fmtDelta(curr, prev, kind) {{
@@ -1494,10 +1545,15 @@ def main() -> None:
         const pm = prev ? (prev.metrics || {{}}) : null;
         const deltaBits = pm ? [
           `Sales ${{fmtDelta(m.new_sales, pm.new_sales, 'currency')}}`,
+          `Pipeline ${{fmtDelta(m.total_active_pipeline, pm.total_active_pipeline, 'currency')}}`,
+          `Customers ${{fmtDelta(m.new_customers, pm.new_customers, 'count')}}`,
           `SQL ${{fmtDelta(m.sql, pm.sql, 'count')}}`,
           `MQL ${{fmtDelta(m.mql, pm.mql, 'count')}}`,
+          `Renewals ${{fmtDelta(m.renewals_number, pm.renewals_number, 'currency')}}`,
+          `NRR Cust ${{fmtDelta(m.nrr_customer_pct, pm.nrr_customer_pct, 'percent')}}`,
+          `NRR $ ${{fmtDelta(m.nrr_dollar_pct, pm.nrr_dollar_pct, 'percent')}}`,
           `ARR ${{fmtDelta(m.arr, pm.arr, 'currency')}}`
-        ].join(' | ') : 'Baseline week';
+        ].join('<br/>') : 'Baseline week';
         return `<tr>`
           + `<td>${{row.week_start || ''}}</td>`
           + `<td>${{row.snapshot_date || ''}}</td>`
@@ -1532,7 +1588,7 @@ def main() -> None:
         const k = inp.getAttribute('data-k');
         if (!goals[k]) goals[k] = {{ quarter_goal: 0, month_goals: [null, null, null] }};
         if (k === 'total_active_pipeline') {{
-          goals[k] = {{ quarter_goal: 800000, month_goals: [800000, 800000, 800000] }};
+          goals[k] = {{ quarter_goal: 800000, month_goals: [800000, 800000, 800000], month_splits: [800000, 800000, 800000] }};
           return;
         }}
         const f = inp.getAttribute('data-f');
@@ -1541,7 +1597,8 @@ def main() -> None:
         }} else {{
           const i = Number(inp.getAttribute('data-i'));
           const raw = inp.value;
-          goals[k].month_goals[i] = raw === '' ? null : Number(raw || 0);
+          if (!Array.isArray(goals[k].month_splits)) goals[k].month_splits = [null, null, null];
+          goals[k].month_splits[i] = raw === '' ? null : Number(raw || 0);
         }}
       }});
       saveQuarterGoals(goalQuarter.value, goals);
