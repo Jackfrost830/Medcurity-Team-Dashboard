@@ -104,11 +104,10 @@ def main() -> None:
     html {{ background:var(--bgTop); }}
     body {{ margin:0; font-family: "Avenir Next", "Manrope", "SF Pro Text", "Segoe UI", sans-serif; color:var(--ink); background:radial-gradient(1200px 580px at 90% -14%, var(--glow) 0%, transparent 62%), linear-gradient(180deg,var(--bgTop) 0%, var(--bg) 34%); transition:background .2s ease,color .2s ease; }}
     .wrap {{ max-width:1760px; margin:16px auto; padding:0 20px 22px; }}
-    .top {{ display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; gap:10px; margin-bottom:12px; }}
+    .top {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }}
     h1 {{ margin:0; font-size:34px; letter-spacing:.01em; color:var(--ink); }}
-    .top h1 {{ justify-self:center; text-align:center; }}
     .stamp {{
-      text-align:right; color:var(--muted); font-size:12px; line-height:1.25;
+      text-align:center; color:var(--muted); font-size:12px; line-height:1.25;
       border:1px solid var(--line);
       border-radius:999px;
       padding:7px 12px;
@@ -119,8 +118,6 @@ def main() -> None:
     .stamp-main {{ color:var(--ink); font-weight:700; font-size:12px; letter-spacing:.01em; }}
     .stamp-sub {{ margin-top:2px; font-size:11px; opacity:.92; }}
     .actions {{ display:flex; gap:8px; }}
-    .top .actions {{ justify-self:end; }}
-    .top .stamp {{ justify-self:start; }}
     .actions a, .actions button {{ color:var(--ink); text-decoration:none; font-weight:700; border:1px solid var(--line); padding:7px 10px; border-radius:8px; background:var(--card); cursor:pointer; }}
     .sections {{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start; }}
     .sec {{ border:1px solid var(--line); border-radius:16px; background:var(--card); padding:12px; box-shadow:0 10px 24px rgba(19,40,68,.10); }}
@@ -194,9 +191,10 @@ def main() -> None:
       .sales, .marketing, .cs, .svc, .dev {{ grid-column: auto; grid-row: auto; }}
     }}
     @media (max-width: 980px) {{
-      .top {{ grid-template-columns: 1fr; }}
-      .top .stamp, .top .actions, .top h1 {{ justify-self:stretch; text-align:center; }}
+      .top {{ display:grid; grid-template-columns:1fr; gap:8px; }}
+      .top h1 {{ text-align:center; }}
       .top .actions {{ justify-content:center; }}
+      .top .stamp {{ margin:0 auto; }}
     }}
     @media (max-width: 980px) {{ .svc-grid {{ grid-template-columns:repeat(2,minmax(0,1fr)); }} .cs-extra {{ grid-template-columns:1fr; }} }}
     @media (max-width: 780px) {{ .chart-grid, .pair-grid, .svc-grid {{ grid-template-columns:1fr; }} }}
