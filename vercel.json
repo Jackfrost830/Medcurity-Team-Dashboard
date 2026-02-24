@@ -1,10 +1,7 @@
 {
-  "cleanUrls": true,
   "trailingSlash": false,
-  "redirects": [
-    { "source": "/", "destination": "/dashboard_team_view", "permanent": false }
-  ],
   "rewrites": [
+    { "source": "/", "destination": "/dashboard_team_view.html" },
     { "source": "/dashboard_team_view", "destination": "/dashboard_team_view.html" },
     { "source": "/dashboard_preview", "destination": "/dashboard_preview.html" },
     { "source": "/goals_admin", "destination": "/goals_admin.html" }
