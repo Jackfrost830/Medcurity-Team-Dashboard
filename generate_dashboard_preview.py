@@ -976,6 +976,10 @@ def main() -> None:
           ctx.font = '700 18px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
+          if (atRisk <= 0) {{
+            ctx.restore();
+            return;
+          }}
           ctx.fillText(num(centerCount), x, y);
           ctx.restore();
         }}
