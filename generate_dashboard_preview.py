@@ -147,7 +147,14 @@ def main() -> None:
     .health-wrap canvas {{ width:100% !important; height:150px !important; }}
     .svc-title {{ margin:0 0 8px; font-size:30px; }}
     .svc-grid {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }}
-    .svc-status {{ margin-top:8px; font-size:13px; color:var(--muted); }}
+    .svc-grid .kpi {{ display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; min-height:132px; }}
+    .svc-grid .kpi .v {{ margin-top:6px; }}
+    .health-card {{ align-items:stretch !important; }}
+    .health-card .k, .health-card .v {{ text-align:center; }}
+    .svc-status {{ margin-top:8px; font-size:13px; color:var(--muted); border:1px solid var(--line); border-radius:10px; padding:8px; background:var(--cardSoft); }}
+    .svc-status h3 {{ margin:0 0 6px; font-size:13px; color:var(--ink); }}
+    .status-chips {{ display:flex; flex-wrap:wrap; gap:6px; }}
+    .status-chip {{ border:1px solid var(--line); border-radius:999px; padding:4px 8px; font-size:12px; background:var(--card); color:var(--ink); }}
     .dev-head {{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }}
     .dev-title {{ margin:0; font-size:30px; }}
     .dev-actions button {{ color:var(--ink); border:1px solid var(--line); background:var(--cardSoft); padding:6px 10px; border-radius:8px; cursor:pointer; }}
@@ -269,7 +276,10 @@ def main() -> None:
           </div>
         </div>
       </div>
-      <div class=\"svc-status\" id=\"k-svc-warning\"></div>
+      <div class=\"svc-status\">
+        <h3>Project Status Breakdown</h3>
+        <div class=\"status-chips\" id=\"k-svc-status-breakdown\"></div>
+      </div>
     </section>
 
     <section class=\"sec dev\">
@@ -375,7 +385,7 @@ def main() -> None:
         normalizeGoalEntry(goals[metricKey], DEFAULT_GOALS[metricKey], metricKey),
         metricKey
       );
-      if (metricKey === 'total_active_pipeline' || mode === 'snapshot') {{
+      if (metricKey === 'total_active_pipeline') {{
         const v = Number((g.month_goals && g.month_goals[0]) || g.quarter_goal || 800000);
         return {{ monthly: [v, v, v], cumulative: [v, v, v] }};
       }}
@@ -561,7 +571,18 @@ def main() -> None:
       const ui = chartUi();
       const colorByStatus = (s) => s === 'green' ? ui.green : (s === 'yellow' ? ui.yellow : (s === 'red' ? ui.red : ui.clear));
       const isPipeline = metricKey === 'total_active_pipeline';
-      const yMax = isPipeline ? 1000000 : undefined;
+      let yMax = isPipeline ? 1000000 : undefined;
+      if (metricKey === 'sql') {{
+        const top = Math.max(
+          ...actual.filter(v => v !== null && v !== undefined).map(v => Number(v)),
+          ...goals.filter(v => v !== null && v !== undefined).map(v => Number(v)),
+          0
+        );
+        yMax = top > 0 ? Math.ceil(top * 1.2) : undefined;
+      }}
+      const layoutPadding = metricKey === 'sql'
+        ? {{ top: 20, right: 26, left: 16, bottom: 8 }}
+        : {{ top: 14, right: 14, left: 16, bottom: 6 }};
 
       new Chart(document.getElementById('c-' + metricKey), {{
         type: 'line',
@@ -621,7 +642,7 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          layout: {{ padding: {{ top: 14, right: 14, left: 16, bottom: 6 }} }},
+          layout: {{ padding: layoutPadding }},
           plugins: {{
             legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }}
           }},
@@ -867,12 +888,16 @@ def main() -> None:
     const svcStatus = String(services.overall_project_status || 'green').toLowerCase();
     const svcBadge = svcStatus === 'red' ? '<span class=\"badge b-red\">Red</span>' : '<span class=\"badge b-green\">Green</span>';
     document.getElementById('k-svc-status').innerHTML = svcBadge;
-    const warningEl = document.getElementById('k-svc-warning');
-    const flagged = Array.isArray(services.projects_over_red_threshold) ? services.projects_over_red_threshold : [];
-    if (flagged.length) {{
-      warningEl.textContent = 'Attention: ' + flagged.map(x => `${{x.project}} (${{num(x.red_items)}} red items)`).join(', ');
-    }} else {{
-      warningEl.textContent = 'All tracked projects are under red-item threshold.';
+    const breakdownEl = document.getElementById('k-svc-status-breakdown');
+    const breakdown = Array.isArray(services.status_breakdown) ? services.status_breakdown : [];
+    if (breakdownEl) {{
+      if (!breakdown.length) {{
+        breakdownEl.innerHTML = '<span class=\"status-chip\">No status data</span>';
+      }} else {{
+        breakdownEl.innerHTML = breakdown
+          .map(item => `<span class=\"status-chip\">${{item.status}}: ${{num(item.count || 0)}}</span>`)
+          .join('');
+      }}
     }}
     drawServicesHealthChart();
 

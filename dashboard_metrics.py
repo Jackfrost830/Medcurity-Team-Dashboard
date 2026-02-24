@@ -2,6 +2,7 @@ import json
 import os
 import re
 import sqlite3
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -683,6 +684,15 @@ def _admin_dashboard_avg_close_days(db_path: Path, quarter_lbl: str) -> float:
     return (sum(vals) / len(vals)) if vals else 0.0
 
 
+def _display_status(raw: Any) -> str:
+    text = str(raw or "").strip()
+    if not text:
+        return "Unknown"
+    text = re.sub(r"[_-]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text.title()
+
+
 def compute_services_from_admin_dashboard(config: dict[str, Any], anchor_date: date) -> dict[str, Any]:
     services_cfg = config.get("services", {}) if isinstance(config.get("services"), dict) else {}
     raw_db_path = str(services_cfg.get("admin_dashboard_db_path", "")).strip() or str(
@@ -697,7 +707,13 @@ def compute_services_from_admin_dashboard(config: dict[str, Any], anchor_date: d
     if not db_path.exists():
         return {"status": "error", "message": f"Admin dashboard DB not found: {db_path}"}
 
-    active, completed = _admin_dashboard_projects(_load_admin_dashboard_rows(db_path))
+    rows = _load_admin_dashboard_rows(db_path)
+    active, completed = _admin_dashboard_projects(rows)
+    status_counts = Counter(_display_status(row.get("task_status")) for row in rows)
+    status_breakdown = [
+        {"status": status, "count": count}
+        for status, count in sorted(status_counts.items(), key=lambda x: (-x[1], x[0]))
+    ]
     q_label = quarter_label(anchor_date)
     closed_this_quarter = sum(1 for p in completed if p.get("period_label") == q_label)
     avg_close_days = _admin_dashboard_avg_close_days(db_path, q_label)
@@ -710,6 +726,7 @@ def compute_services_from_admin_dashboard(config: dict[str, Any], anchor_date: d
         "avg_project_close_days_this_quarter": avg_close_days,
         "overall_project_status": "green",
         "projects_over_red_threshold": [],
+        "status_breakdown": status_breakdown,
         "task_count": len(active) + len(completed),
     }
 
@@ -732,9 +749,11 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
     closed_this_quarter = 0
     close_day_values: list[float] = []
     projects_over_threshold: list[dict[str, Any]] = []
+    status_counts: Counter[str] = Counter()
 
     for task in tasks:
         status_name = str((task.get("status") or {}).get("status", "")).strip().lower()
+        status_counts[_display_status(status_name)] += 1
         is_closed = status_name in closed_statuses
         if not is_closed:
             active_count += 1
@@ -777,6 +796,10 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
 
     avg_close_days = sum(close_day_values) / len(close_day_values) if close_day_values else 0.0
     overall_status = "green" if not projects_over_threshold else "red"
+    status_breakdown = [
+        {"status": status, "count": count}
+        for status, count in sorted(status_counts.items(), key=lambda x: (-x[1], x[0]))
+    ]
     return {
         "status": "ok",
         "source": "clickup",
@@ -786,6 +809,7 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
         "avg_project_close_days_this_quarter": avg_close_days,
         "overall_project_status": overall_status,
         "projects_over_red_threshold": projects_over_threshold,
+        "status_breakdown": status_breakdown,
         "red_item_threshold": red_threshold,
         "task_count": len(tasks),
     }
