@@ -248,7 +248,7 @@
     const ARR_HISTORY = [{"quarter": "Q2-2024", "value": 920441.25}, {"quarter": "Q3-2024", "value": 941425.5}, {"quarter": "Q4-2024", "value": 957989.0}, {"quarter": "Q1-2025", "value": 973958.55005}, {"quarter": "Q2-2025", "value": 991001.15005}, {"quarter": "Q3-2025", "value": 1003099.65005}, {"quarter": "Q4-2025", "value": 1005173.65088}, {"quarter": "Q1-2026", "value": 1053498.40088}];
     const NRR_DOLLAR_HISTORY = [{"quarter": "Q1-2025", "value": 0.8792408210768073}, {"quarter": "Q2-2025", "value": 0.8413659273760765}, {"quarter": "Q3-2025", "value": 0.9333100067635891}, {"quarter": "Q4-2025", "value": 0.8400561472863652}, {"quarter": "Q1-2026", "value": 0.9407185621280181}];
     const NRR_CUSTOMER_HISTORY = [{"quarter": "Q1-2025", "value": 0.8620689655172413}, {"quarter": "Q2-2025", "value": 0.7441860465116279}, {"quarter": "Q3-2025", "value": 0.9130434782608696}, {"quarter": "Q4-2025", "value": 0.8771929824561404}, {"quarter": "Q1-2026", "value": 0.8864628820960698}];
-    const GENERATED_AT = "2026-02-24 19:59 UTC";
+    const GENERATED_AT = "2026-02-24 20:04 UTC";
     const CURRENT_QUARTER = "Q1-2026";
     const VIEW_ONLY = true;
     if (VIEW_ONLY) document.documentElement.classList.add('view-only');
@@ -438,6 +438,56 @@
         arr: cssVar('--arr'),
         clear: 'rgba(0,0,0,0)'
       };
+    }
+
+    // Force hover/tooltip activation to match actual rendered point geometry.
+    function lockHoverToDots(chart, evt, dataValues, datasetIndex = 0, radiusPad = 0) {
+      if (!chart || !evt) return;
+      const nativeEvt = evt.native || evt;
+      if (!nativeEvt) return;
+
+      if (nativeEvt.type === 'mouseout') {
+        chart.setActiveElements([]);
+        if (chart.tooltip) chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+        chart.canvas.style.cursor = 'default';
+        chart.update('none');
+        return;
+      }
+
+      const rel = Chart.helpers.getRelativePosition(nativeEvt, chart);
+      const meta = chart.getDatasetMeta(datasetIndex);
+      const points = (meta && Array.isArray(meta.data)) ? meta.data : [];
+      if (!points.length) return;
+
+      let best = null;
+      let bestDist = Infinity;
+      points.forEach((pt, idx) => {
+        const v = Array.isArray(dataValues) ? dataValues[idx] : null;
+        if (v === null || v === undefined || !pt) return;
+        const props = pt.getProps(['x', 'y'], true);
+        const baseRadius = Number(pt.options?.radius ?? 0);
+        if (!(baseRadius > 0)) return;
+        const triggerRadius = baseRadius + Number(radiusPad || 0);
+        const dx = rel.x - props.x;
+        const dy = rel.y - props.y;
+        const d = Math.hypot(dx, dy);
+        if (d <= triggerRadius && d < bestDist) {
+          bestDist = d;
+          best = { idx, x: props.x, y: props.y };
+        }
+      });
+
+      if (best) {
+        const active = [{ datasetIndex, index: best.idx }];
+        chart.setActiveElements(active);
+        if (chart.tooltip) chart.tooltip.setActiveElements(active, { x: best.x, y: best.y });
+        chart.canvas.style.cursor = 'pointer';
+      } else {
+        chart.setActiveElements([]);
+        if (chart.tooltip) chart.tooltip.setActiveElements([], { x: rel.x, y: rel.y });
+        chart.canvas.style.cursor = 'default';
+      }
+      chart.update('none');
     }
 
     function fmtByKind(kind, value) {
@@ -635,6 +685,7 @@
           responsive: true,
           maintainAspectRatio: false,
           interaction: { mode: 'point', intersect: true },
+          onHover: (evt, _active, chart) => lockHoverToDots(chart, evt, actual, 0, 0),
           layout: { padding: layoutPadding },
           plugins: {
             legend: { display: true, labels: { boxWidth: 10, color: ui.text } },
@@ -683,6 +734,7 @@
           responsive: true,
           maintainAspectRatio: false,
           interaction: { mode: 'point', intersect: true },
+          onHover: (evt, _active, chart) => lockHoverToDots(chart, evt, values, 0, 0),
           layout: { padding: { top: 14, right: 14, left: 16, bottom: 6 } },
           plugins: {
             legend: { display: false },
@@ -750,6 +802,7 @@
           responsive: true,
           maintainAspectRatio: false,
           interaction: { mode: 'point', intersect: true },
+          onHover: (evt, _active, chart) => lockHoverToDots(chart, evt, values, 0, 0),
           layout: { padding: { top: 14, right: 14, left: 16, bottom: 6 } },
           plugins: {
             legend: { display: true, labels: { boxWidth: 10, color: ui.text } },
