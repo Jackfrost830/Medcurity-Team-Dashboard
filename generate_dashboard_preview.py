@@ -750,12 +750,11 @@ def main() -> None:
       const ui = chartUi();
       const colorByStatus = (s) => s === 'green' ? ui.green : (s === 'yellow' ? ui.yellow : (s === 'red' ? ui.red : ui.clear));
       const isPipeline = metricKey === 'total_active_pipeline';
-      const isNewSales = metricKey === 'new_sales';
-      const actualPointRadius = isNewSales ? 5 : 4;
-      const actualPointHoverRadius = isNewSales ? 7 : 6;
-      const actualPointHitRadius = isNewSales ? 7 : 4;
-      const goalPointHoverRadius = isNewSales ? 7 : 6;
-      const goalPointHitRadius = isNewSales ? 7 : 4;
+      const actualPointRadius = 4;
+      const actualPointHoverRadius = 6;
+      const actualPointHitRadius = 4;
+      const goalPointHoverRadius = 6;
+      const goalPointHitRadius = 4;
       let yMax = isPipeline ? 1000000 : undefined;
       if (metricKey === 'sql') {{
         const top = Math.max(
@@ -863,7 +862,7 @@ def main() -> None:
             data: values,
             borderColor: ui.arr,
             borderWidth: 3,
-            pointRadius: 5,
+            pointRadius: 4,
             pointHoverRadius: 7,
             pointHitRadius: 4,
             pointBackgroundColor: ui.arr,
@@ -875,11 +874,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'nearest', axis: 'xy', intersect: true }},
+          interaction: {{ mode: 'point', intersect: true }},
           layout: {{ padding: {{ top: 14, right: 14, left: 16, bottom: 6 }} }},
           plugins: {{
             legend: {{ display: false }},
-            tooltip: {{ mode: 'nearest', intersect: true }}
+            tooltip: {{ mode: 'point', intersect: true }}
           }},
           scales: {{
             y: {{ beginAtZero: false, grid: {{ color: ui.grid }}, ticks: {{ color: ui.muted, padding: 6, callback: (v) => money(v) }} }},
