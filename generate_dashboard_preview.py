@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 INPUT = Path("dashboard_metrics_output.json")
@@ -8,6 +8,7 @@ TEAM_OUTPUT = Path("dashboard_team_view.html")
 INDEX_OUTPUT = Path("index.html")
 GOALS_OUTPUT = Path("goals_admin.html")
 GOALS_JSON = Path("dashboard_goals.json")
+HISTORY_JSON = Path("dashboard_history.json")
 
 
 DEFAULT_GOALS = {
@@ -55,6 +56,105 @@ def js(obj: dict) -> str:
     return json.dumps(obj)
 
 
+def quarter_label_from_date(d: date) -> str:
+    q = ((d.month - 1) // 3) + 1
+    return f"Q{q}-{d.year}"
+
+
+def parse_iso_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def week_start_monday(d: date) -> date:
+    return d - timedelta(days=d.weekday())
+
+
+def metric_value(data: dict, key: str) -> float | None:
+    dash = data.get("dashboard", {}) if isinstance(data.get("dashboard"), dict) else {}
+    sf = data.get("salesforce", {}) if isinstance(data.get("salesforce"), dict) else {}
+    if isinstance(dash.get(key), dict) and "value" in dash[key]:
+        try:
+            return float(dash[key]["value"])
+        except (TypeError, ValueError):
+            return None
+    metric = sf.get(key, {})
+    if isinstance(metric, dict):
+        source = metric.get("snapshot_value", metric.get("qtd_total", metric.get("value")))
+        try:
+            return float(source)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def build_history_snapshot(data: dict, generated_at_utc: str) -> dict:
+    meta = data.get("meta", {}) if isinstance(data.get("meta"), dict) else {}
+    quarter_anchor = parse_iso_date(str(meta.get("quarter_anchor_date", "")).strip()) or date.today()
+    snapshot_date = datetime.now(timezone.utc).date()
+    services = data.get("services", {}) if isinstance(data.get("services"), dict) else {}
+    metrics = {
+        "arr": metric_value(data, "arr"),
+        "nrr_customer_pct": metric_value(data, "nrr_customer_pct"),
+        "nrr_dollar_pct": metric_value(data, "nrr_dollar_pct"),
+        "renewals_number": metric_value(data, "renewals_number"),
+        "new_sales": metric_value(data, "new_sales"),
+        "total_active_pipeline": metric_value(data, "total_active_pipeline"),
+        "new_customers": metric_value(data, "new_customers"),
+        "lost_customers": metric_value(data, "lost_customers"),
+        "sql": metric_value(data, "sql"),
+        "mql": metric_value(data, "mql"),
+        "services_active_projects": float(services.get("active_projects", 0) or 0),
+        "services_closed_projects_this_quarter": float(services.get("closed_projects_this_quarter", 0) or 0),
+        "services_avg_project_close_days_this_quarter": float(services.get("avg_project_close_days_this_quarter", 0) or 0),
+    }
+    return {
+        "quarter": quarter_label_from_date(quarter_anchor),
+        "quarter_anchor_date": quarter_anchor.isoformat(),
+        "snapshot_date": snapshot_date.isoformat(),
+        "week_start": week_start_monday(snapshot_date).isoformat(),
+        "generated_at_utc": generated_at_utc,
+        "metrics": metrics,
+    }
+
+
+def snapshot_is_complete(snapshot: dict) -> bool:
+    metrics = snapshot.get("metrics", {}) if isinstance(snapshot.get("metrics"), dict) else {}
+    required = [
+        "arr",
+        "nrr_customer_pct",
+        "nrr_dollar_pct",
+        "renewals_number",
+        "new_sales",
+        "total_active_pipeline",
+        "new_customers",
+        "sql",
+        "mql",
+    ]
+    return all(metrics.get(k) is not None for k in required)
+
+
+def upsert_history(history_rows: list[dict], snapshot: dict) -> list[dict]:
+    key = (snapshot.get("quarter"), snapshot.get("week_start"))
+    out: list[dict] = []
+    replaced = False
+    for row in history_rows:
+        row_key = (row.get("quarter"), row.get("week_start"))
+        if row_key == key:
+            out.append(snapshot)
+            replaced = True
+        else:
+            out.append(row)
+    if not replaced:
+        out.append(snapshot)
+    out.sort(key=lambda r: (str(r.get("quarter", "")), str(r.get("week_start", ""))))
+    return out
+
+
 def main() -> None:
     data = json.loads(INPUT.read_text())
     sf = data.get("salesforce", {})
@@ -69,13 +169,26 @@ def main() -> None:
     current_q_label = "Q1-2026"
     q_anchor = (data.get("meta", {}) or {}).get("quarter_anchor_date")
     if isinstance(q_anchor, str) and len(q_anchor) >= 7:
-        y = int(q_anchor[:4])
-        m = int(q_anchor[5:7])
-        q_num = ((m - 1) // 3) + 1
-        current_q_label = f"Q{q_num}-{y}"
+        d = parse_iso_date(q_anchor)
+        if d is not None:
+            current_q_label = quarter_label_from_date(d)
     live_arr = (sf.get("arr", {}) or {}).get("value") or (dash.get("arr", {}) or {}).get("value") or 0
     arr_history = [*ARR_HISTORY_POINTS, {"quarter": current_q_label, "value": live_arr}]
     generated_at_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    if HISTORY_JSON.exists():
+        try:
+            history_data = json.loads(HISTORY_JSON.read_text())
+            if not isinstance(history_data, list):
+                history_data = []
+        except json.JSONDecodeError:
+            history_data = []
+    else:
+        history_data = []
+    snapshot = build_history_snapshot(data, generated_at_utc)
+    if snapshot_is_complete(snapshot):
+        history_data = upsert_history(history_data, snapshot)
+        HISTORY_JSON.write_text(json.dumps(history_data, indent=2))
 
     dashboard_html = f"""<!doctype html>
 <html lang=\"en\">
@@ -328,6 +441,7 @@ def main() -> None:
     const NRR_DOLLAR_HISTORY = {js([*NRR_DOLLAR_HISTORY_POINTS, {"quarter": current_q_label, "value": (dash.get("nrr_dollar_pct", {}) or {}).get("value", (sf.get("nrr_dollar_pct", {}) or {}).get("value", 0))}])};
     const NRR_CUSTOMER_HISTORY = {js([*NRR_CUSTOMER_HISTORY_POINTS, {"quarter": current_q_label, "value": (dash.get("nrr_customer_pct", {}) or {}).get("value", (sf.get("nrr_customer_pct", {}) or {}).get("value", 0))}])};
     const GENERATED_AT = {js(generated_at_utc)};
+    const CURRENT_QUARTER = {js(current_q_label)};
     const VIEW_ONLY = false;
     if (VIEW_ONLY) document.documentElement.classList.add('view-only');
     const THEME_KEY = 'dashboard_theme_v1';
@@ -382,7 +496,13 @@ def main() -> None:
       }};
     }}
 
-    function loadGoals() {{
+    function defaultGoals() {{
+      const out = {{}};
+      Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(DEFAULT_GOALS[k], DEFAULT_GOALS[k], k));
+      return out;
+    }}
+
+    function loadLegacyGoals() {{
       try {{
         const v2 = localStorage.getItem('dashboard_goals_v2');
         if (v2) {{
@@ -399,9 +519,36 @@ def main() -> None:
           return out;
         }}
       }} catch (e) {{}}
-      const out = {{}};
-      Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(DEFAULT_GOALS[k], DEFAULT_GOALS[k], k));
-      return out;
+      return null;
+    }}
+
+    function loadGoalStore() {{
+      try {{
+        const raw = localStorage.getItem('dashboard_goals_by_quarter_v1');
+        if (!raw) return {{}};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {{}};
+      }} catch (e) {{
+        return {{}};
+      }}
+    }}
+
+    function loadGoals() {{
+      const store = loadGoalStore();
+      if (store[CURRENT_QUARTER] && typeof store[CURRENT_QUARTER] === 'object') {{
+        const out = {{}};
+        Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(store[CURRENT_QUARTER][k], DEFAULT_GOALS[k], k));
+        return out;
+      }}
+      const legacy = loadLegacyGoals();
+      if (legacy) {{
+        if (!VIEW_ONLY) {{
+          store[CURRENT_QUARTER] = legacy;
+          localStorage.setItem('dashboard_goals_by_quarter_v1', JSON.stringify(store));
+        }}
+        return legacy;
+      }}
+      return defaultGoals();
     }}
 
     function monthlyGoals(metricKey, mode) {{
@@ -1111,30 +1258,74 @@ def main() -> None:
   <title>Dashboard Goals Admin</title>
   <style>
     body {{ font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#f3f7fc; color:#0f2747; margin:0; }}
-    .wrap {{ max-width:1050px; margin:20px auto; padding:0 14px; }}
+    .wrap {{ max-width:1200px; margin:20px auto; padding:0 14px; }}
     h1 {{ margin:0 0 8px; }}
     .card {{ background:#fff; border:1px solid #d8e4f3; border-radius:10px; padding:12px; margin-bottom:10px; }}
-    .row {{ display:grid; grid-template-columns: 200px 170px 1fr 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }}
+    .tabs {{ display:flex; gap:8px; margin-bottom:10px; }}
+    .tab {{ padding:8px 12px; border-radius:8px; border:1px solid #bfd3ec; background:#fff; cursor:pointer; }}
+    .tab.active {{ background:#0f2747; color:#fff; border-color:#0f2747; }}
+    .controls {{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }}
+    .controls label {{ font-size:12px; color:#5f7190; }}
+    .controls select {{ padding:8px; border:1px solid #c8d8ee; border-radius:8px; background:#fff; }}
+    .row {{ display:grid; grid-template-columns: 220px 170px 1fr 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }}
     input {{ padding:8px; border:1px solid #c8d8ee; border-radius:8px; width:100%; }}
-    .btns {{ display:flex; gap:8px; }}
+    .btns {{ display:flex; gap:8px; margin-top:8px; }}
     button, a {{ padding:8px 12px; border-radius:8px; border:1px solid #bfd3ec; background:#fff; cursor:pointer; text-decoration:none; color:#0f2747; }}
     .hint {{ color:#5f7190; font-size:12px; margin-bottom:10px; }}
-    .head {{ font-size:11px; color:#5f7190; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; display:grid; grid-template-columns: 200px 170px 1fr 1fr 1fr; gap:8px; }}
-    @media (max-width: 900px) {{ .row, .head {{ grid-template-columns: 1fr; }} }}
+    .head {{ font-size:11px; color:#5f7190; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; display:grid; grid-template-columns: 220px 170px 1fr 1fr 1fr; gap:8px; }}
+    .pane {{ display:none; }}
+    .pane.active {{ display:block; }}
+    .table-wrap {{ overflow:auto; border:1px solid #d8e4f3; border-radius:8px; }}
+    table {{ width:100%; border-collapse:collapse; min-width:980px; }}
+    th, td {{ border-bottom:1px solid #e6eef8; padding:8px; font-size:12px; text-align:left; white-space:nowrap; }}
+    th {{ color:#5f7190; font-size:11px; text-transform:uppercase; letter-spacing:.05em; background:#f8fbff; }}
+    .muted {{ color:#7085a4; }}
+    @media (max-width: 980px) {{ .row, .head {{ grid-template-columns: 1fr; }} }}
   </style>
 </head>
 <body>
   <div class=\"wrap\">
     <h1>Goals Admin</h1>
-    <div class=\"hint\">Set quarter goal and cumulative month goals (M1, M2, M3). M3 is forced to the quarter goal. If M1/M2 are blank, they auto-fill evenly. Active Pipeline is fixed at 800,000 each month.</div>
-    <div class=\"card\">
-      <div class=\"head\"><div>Metric</div><div>Quarter Goal</div><div>Month1 Goal</div><div>Month2 Goal</div><div>Month3 Goal</div></div>
-      <div id=\"form\"></div>
+    <div class=\"tabs\">
+      <button class=\"tab active\" id=\"tab-goals\" type=\"button\">Goals</button>
+      <button class=\"tab\" id=\"tab-history\" type=\"button\">Historical</button>
     </div>
-    <div class=\"btns\">
-      <button id=\"save\">Save Goals</button>
-      <button id=\"reset\">Reset Defaults</button>
-      <a href=\"dashboard_preview.html\">Back To Dashboard</a>
+
+    <div class=\"pane active\" id=\"pane-goals\">
+      <div class=\"hint\">Quarter goals are stored per quarter. M3 is forced to quarter goal. If M1/M2 are blank, they auto-fill evenly. Active Pipeline remains fixed at 800,000 each month.</div>
+      <div class=\"controls\">
+        <label for=\"goal-quarter\">Goal Quarter</label>
+        <select id=\"goal-quarter\"></select>
+      </div>
+      <div class=\"card\">
+        <div class=\"head\">
+          <div>Metric</div><div>Quarter Goal</div><div id=\"m1h\">Month1 Goal</div><div id=\"m2h\">Month2 Goal</div><div id=\"m3h\">Month3 Goal</div>
+        </div>
+        <div id=\"form\"></div>
+      </div>
+      <div class=\"btns\">
+        <button id=\"save\">Save Goals</button>
+        <button id=\"reset\">Reset Quarter Defaults</button>
+        <a href=\"dashboard_preview.html\">Back To Dashboard</a>
+      </div>
+    </div>
+
+    <div class=\"pane\" id=\"pane-history\">
+      <div class=\"hint\">Weekly snapshots are captured on dashboard generation runs. Use this to compare quarter progress week-over-week.</div>
+      <div class=\"controls\">
+        <label for=\"history-quarter\">History Quarter</label>
+        <select id=\"history-quarter\"></select>
+      </div>
+      <div class=\"table-wrap\">
+        <table>
+          <thead>
+            <tr>
+              <th>Week Start</th><th>Snapshot Date</th><th>ARR</th><th>New Sales</th><th>Pipeline</th><th>New Customers</th><th>SQL</th><th>MQL</th><th>Renewals</th><th>NRR Cust</th><th>NRR $</th><th>Δ vs prior week</th>
+            </tr>
+          </thead>
+          <tbody id=\"history-body\"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -1152,6 +1343,26 @@ def main() -> None:
       qtd_billing_progress:'QTD Billing Goal'
     }};
     const DEFAULT_GOALS = {js(DEFAULT_GOALS)};
+    const CURRENT_QUARTER = {js(current_q_label)};
+    const HISTORY_DATA = {js(history_data)};
+    const GOALS_BY_QUARTER_KEY = 'dashboard_goals_by_quarter_v1';
+
+    function money(v) {{ return '$' + Number(v || 0).toLocaleString(undefined, {{maximumFractionDigits:0}}); }}
+    function num(v) {{ return Number(v || 0).toLocaleString(undefined, {{maximumFractionDigits:0}}); }}
+    function pct(v) {{ return (Number(v || 0) * 100).toFixed(1) + '%'; }}
+
+    function quarterMonths(qLabel) {{
+      const m = /^Q([1-4])-(\\d{{4}})$/.exec(String(qLabel || '').trim());
+      if (!m) return ['Month1','Month2','Month3'];
+      const q = Number(m[1]);
+      const year = Number(m[2]);
+      const startMonth = (q - 1) * 3;
+      const names = [];
+      for (let i = 0; i < 3; i++) {{
+        names.push(new Date(year, startMonth + i, 1).toLocaleString(undefined, {{ month: 'short' }}));
+      }}
+      return names;
+    }}
 
     function normalizeGoalEntry(raw, fallback, metricKey = '') {{
       if (metricKey === 'total_active_pipeline') {{
@@ -1173,30 +1384,72 @@ def main() -> None:
       }};
     }}
 
-    function loadGoals() {{
-      try {{
-        const v2 = localStorage.getItem('dashboard_goals_v2');
-        if (v2) {{
-          const parsed = JSON.parse(v2);
-          const out = {{}};
-          Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(parsed[k], DEFAULT_GOALS[k], k));
-          return out;
-        }}
-        const v1 = localStorage.getItem('dashboard_goals_v1');
-        if (v1) {{
-          const parsed = JSON.parse(v1);
-          const out = {{}};
-          Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(parsed[k], DEFAULT_GOALS[k], k));
-          return out;
-        }}
-      }} catch (e) {{}}
+    function defaultGoals() {{
       const out = {{}};
       Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(DEFAULT_GOALS[k], DEFAULT_GOALS[k], k));
       return out;
     }}
 
-    function render() {{
-      const goals = loadGoals();
+    function loadGoalStore() {{
+      try {{
+        const raw = localStorage.getItem(GOALS_BY_QUARTER_KEY);
+        if (raw) {{
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }}
+      }} catch (e) {{}}
+      const migrated = {{}};
+      try {{
+        const v2 = localStorage.getItem('dashboard_goals_v2');
+        if (v2) {{
+          migrated[CURRENT_QUARTER] = JSON.parse(v2);
+          localStorage.setItem(GOALS_BY_QUARTER_KEY, JSON.stringify(migrated));
+          return migrated;
+        }}
+      }} catch (e) {{}}
+      return {{}};
+    }}
+
+    function getQuarterGoals(quarter) {{
+      const store = loadGoalStore();
+      const src = (store[quarter] && typeof store[quarter] === 'object') ? store[quarter] : defaultGoals();
+      const out = {{}};
+      Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(src[k], DEFAULT_GOALS[k], k));
+      return out;
+    }}
+
+    function saveQuarterGoals(quarter, goals) {{
+      const store = loadGoalStore();
+      store[quarter] = goals;
+      localStorage.setItem(GOALS_BY_QUARTER_KEY, JSON.stringify(store));
+      localStorage.setItem('dashboard_goals_v2', JSON.stringify(goals));
+    }}
+
+    function availableQuarters() {{
+      const set = new Set([CURRENT_QUARTER]);
+      HISTORY_DATA.forEach(row => {{ if (row && row.quarter) set.add(String(row.quarter)); }});
+      const store = loadGoalStore();
+      Object.keys(store).forEach(q => set.add(q));
+      const parseQuarter = (q) => {{
+        const m = /^Q([1-4])-(\\d{{4}})$/.exec(String(q || ''));
+        if (!m) return [0, 0];
+        return [Number(m[2]), Number(m[1])];
+      }};
+      return Array.from(set).sort((a,b) => {{
+        const [ay, aq] = parseQuarter(a);
+        const [by, bq] = parseQuarter(b);
+        return ay === by ? aq - bq : ay - by;
+      }});
+    }}
+
+    function renderGoals() {{
+      const qSel = document.getElementById('goal-quarter');
+      const quarter = qSel.value || CURRENT_QUARTER;
+      const goals = getQuarterGoals(quarter);
+      const months = quarterMonths(quarter);
+      document.getElementById('m1h').textContent = months[0] + ' Goal';
+      document.getElementById('m2h').textContent = months[1] + ' Goal';
+      document.getElementById('m3h').textContent = months[2] + ' Goal';
       const form = document.getElementById('form');
       form.innerHTML = Object.keys(LABELS).map(key => {{
         const g = goals[key] || DEFAULT_GOALS[key];
@@ -1215,8 +1468,66 @@ def main() -> None:
       }}).join('');
     }}
 
+    function fmtDelta(curr, prev, kind) {{
+      if (curr === null || curr === undefined || prev === null || prev === undefined) return 'n/a';
+      const d = Number(curr) - Number(prev);
+      if (!Number.isFinite(d)) return 'n/a';
+      if (kind === 'currency') return (d >= 0 ? '+' : '-') + money(Math.abs(d));
+      if (kind === 'percent') return (d >= 0 ? '+' : '') + (d * 100).toFixed(1) + 'pp';
+      return (d >= 0 ? '+' : '') + num(d);
+    }}
+
+    function renderHistory() {{
+      const q = document.getElementById('history-quarter').value || CURRENT_QUARTER;
+      const rows = HISTORY_DATA
+        .filter(r => String(r.quarter || '') === q)
+        .slice()
+        .sort((a,b) => String(b.week_start || '').localeCompare(String(a.week_start || '')));
+      const body = document.getElementById('history-body');
+      if (!rows.length) {{
+        body.innerHTML = '<tr><td colspan=\"12\" class=\"muted\">No snapshots yet for this quarter.</td></tr>';
+        return;
+      }}
+      body.innerHTML = rows.map((row, idx) => {{
+        const prev = rows[idx + 1];
+        const m = row.metrics || {{}};
+        const pm = prev ? (prev.metrics || {{}}) : null;
+        const deltaBits = pm ? [
+          `Sales ${{fmtDelta(m.new_sales, pm.new_sales, 'currency')}}`,
+          `SQL ${{fmtDelta(m.sql, pm.sql, 'count')}}`,
+          `MQL ${{fmtDelta(m.mql, pm.mql, 'count')}}`,
+          `ARR ${{fmtDelta(m.arr, pm.arr, 'currency')}}`
+        ].join(' | ') : 'Baseline week';
+        return `<tr>`
+          + `<td>${{row.week_start || ''}}</td>`
+          + `<td>${{row.snapshot_date || ''}}</td>`
+          + `<td>${{money(m.arr)}}</td>`
+          + `<td>${{money(m.new_sales)}}</td>`
+          + `<td>${{money(m.total_active_pipeline)}}</td>`
+          + `<td>${{num(m.new_customers)}}</td>`
+          + `<td>${{num(m.sql)}}</td>`
+          + `<td>${{num(m.mql)}}</td>`
+          + `<td>${{money(m.renewals_number)}}</td>`
+          + `<td>${{pct(m.nrr_customer_pct)}}</td>`
+          + `<td>${{pct(m.nrr_dollar_pct)}}</td>`
+          + `<td class=\"muted\">${{deltaBits}}</td>`
+          + `</tr>`;
+      }}).join('');
+    }}
+
+    const goalQuarter = document.getElementById('goal-quarter');
+    const histQuarter = document.getElementById('history-quarter');
+    const quarters = availableQuarters();
+    goalQuarter.innerHTML = quarters.map(q => `<option value=\"${{q}}\">${{q}}</option>`).join('');
+    histQuarter.innerHTML = quarters.map(q => `<option value=\"${{q}}\">${{q}}</option>`).join('');
+    goalQuarter.value = CURRENT_QUARTER;
+    histQuarter.value = CURRENT_QUARTER;
+
+    goalQuarter.onchange = renderGoals;
+    histQuarter.onchange = renderHistory;
+
     document.getElementById('save').onclick = () => {{
-      const goals = loadGoals();
+      const goals = getQuarterGoals(goalQuarter.value);
       document.querySelectorAll('input[data-k]').forEach(inp => {{
         const k = inp.getAttribute('data-k');
         if (!goals[k]) goals[k] = {{ quarter_goal: 0, month_goals: [null, null, null] }};
@@ -1233,16 +1544,32 @@ def main() -> None:
           goals[k].month_goals[i] = raw === '' ? null : Number(raw || 0);
         }}
       }});
-      localStorage.setItem('dashboard_goals_v2', JSON.stringify(goals));
-      alert('Goals saved. Refresh dashboard preview.');
+      saveQuarterGoals(goalQuarter.value, goals);
+      alert('Goals saved for ' + goalQuarter.value + '.');
     }};
 
     document.getElementById('reset').onclick = () => {{
-      localStorage.setItem('dashboard_goals_v2', JSON.stringify(DEFAULT_GOALS));
-      render();
+      saveQuarterGoals(goalQuarter.value, defaultGoals());
+      renderGoals();
     }};
 
-    render();
+    function setTab(name) {{
+      const goalsPane = document.getElementById('pane-goals');
+      const historyPane = document.getElementById('pane-history');
+      const goalsTab = document.getElementById('tab-goals');
+      const historyTab = document.getElementById('tab-history');
+      const goalsActive = name === 'goals';
+      goalsPane.classList.toggle('active', goalsActive);
+      historyPane.classList.toggle('active', !goalsActive);
+      goalsTab.classList.toggle('active', goalsActive);
+      historyTab.classList.toggle('active', !goalsActive);
+    }}
+
+    document.getElementById('tab-goals').onclick = () => setTab('goals');
+    document.getElementById('tab-history').onclick = () => setTab('history');
+
+    renderGoals();
+    renderHistory();
   </script>
 </body>
 </html>

@@ -248,7 +248,8 @@
     const ARR_HISTORY = [{"quarter": "Q2-2024", "value": 920441.25}, {"quarter": "Q3-2024", "value": 941425.5}, {"quarter": "Q4-2024", "value": 957989.0}, {"quarter": "Q1-2025", "value": 973958.55005}, {"quarter": "Q2-2025", "value": 991001.15005}, {"quarter": "Q3-2025", "value": 1003099.65005}, {"quarter": "Q4-2025", "value": 1005173.65088}, {"quarter": "Q1-2026", "value": 1053498.40088}];
     const NRR_DOLLAR_HISTORY = [{"quarter": "Q1-2025", "value": 0.8792408210768073}, {"quarter": "Q2-2025", "value": 0.8413659273760765}, {"quarter": "Q3-2025", "value": 0.9333100067635891}, {"quarter": "Q4-2025", "value": 0.8400561472863652}, {"quarter": "Q1-2026", "value": 0.9437845373561741}];
     const NRR_CUSTOMER_HISTORY = [{"quarter": "Q1-2025", "value": 0.8620689655172413}, {"quarter": "Q2-2025", "value": 0.7441860465116279}, {"quarter": "Q3-2025", "value": 0.9130434782608696}, {"quarter": "Q4-2025", "value": 0.8771929824561404}, {"quarter": "Q1-2026", "value": 0.8913043478260869}];
-    const GENERATED_AT = "2026-02-24 06:41 UTC";
+    const GENERATED_AT = "2026-02-24 06:51 UTC";
+    const CURRENT_QUARTER = "Q1-2026";
     const VIEW_ONLY = false;
     if (VIEW_ONLY) document.documentElement.classList.add('view-only');
     const THEME_KEY = 'dashboard_theme_v1';
@@ -303,7 +304,13 @@
       };
     }
 
-    function loadGoals() {
+    function defaultGoals() {
+      const out = {};
+      Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(DEFAULT_GOALS[k], DEFAULT_GOALS[k], k));
+      return out;
+    }
+
+    function loadLegacyGoals() {
       try {
         const v2 = localStorage.getItem('dashboard_goals_v2');
         if (v2) {
@@ -320,9 +327,36 @@
           return out;
         }
       } catch (e) {}
-      const out = {};
-      Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(DEFAULT_GOALS[k], DEFAULT_GOALS[k], k));
-      return out;
+      return null;
+    }
+
+    function loadGoalStore() {
+      try {
+        const raw = localStorage.getItem('dashboard_goals_by_quarter_v1');
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function loadGoals() {
+      const store = loadGoalStore();
+      if (store[CURRENT_QUARTER] && typeof store[CURRENT_QUARTER] === 'object') {
+        const out = {};
+        Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(store[CURRENT_QUARTER][k], DEFAULT_GOALS[k], k));
+        return out;
+      }
+      const legacy = loadLegacyGoals();
+      if (legacy) {
+        if (!VIEW_ONLY) {
+          store[CURRENT_QUARTER] = legacy;
+          localStorage.setItem('dashboard_goals_by_quarter_v1', JSON.stringify(store));
+        }
+        return legacy;
+      }
+      return defaultGoals();
     }
 
     function monthlyGoals(metricKey, mode) {

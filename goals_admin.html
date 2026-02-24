@@ -6,30 +6,74 @@
   <title>Dashboard Goals Admin</title>
   <style>
     body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#f3f7fc; color:#0f2747; margin:0; }
-    .wrap { max-width:1050px; margin:20px auto; padding:0 14px; }
+    .wrap { max-width:1200px; margin:20px auto; padding:0 14px; }
     h1 { margin:0 0 8px; }
     .card { background:#fff; border:1px solid #d8e4f3; border-radius:10px; padding:12px; margin-bottom:10px; }
-    .row { display:grid; grid-template-columns: 200px 170px 1fr 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }
+    .tabs { display:flex; gap:8px; margin-bottom:10px; }
+    .tab { padding:8px 12px; border-radius:8px; border:1px solid #bfd3ec; background:#fff; cursor:pointer; }
+    .tab.active { background:#0f2747; color:#fff; border-color:#0f2747; }
+    .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+    .controls label { font-size:12px; color:#5f7190; }
+    .controls select { padding:8px; border:1px solid #c8d8ee; border-radius:8px; background:#fff; }
+    .row { display:grid; grid-template-columns: 220px 170px 1fr 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }
     input { padding:8px; border:1px solid #c8d8ee; border-radius:8px; width:100%; }
-    .btns { display:flex; gap:8px; }
+    .btns { display:flex; gap:8px; margin-top:8px; }
     button, a { padding:8px 12px; border-radius:8px; border:1px solid #bfd3ec; background:#fff; cursor:pointer; text-decoration:none; color:#0f2747; }
     .hint { color:#5f7190; font-size:12px; margin-bottom:10px; }
-    .head { font-size:11px; color:#5f7190; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; display:grid; grid-template-columns: 200px 170px 1fr 1fr 1fr; gap:8px; }
-    @media (max-width: 900px) { .row, .head { grid-template-columns: 1fr; } }
+    .head { font-size:11px; color:#5f7190; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; display:grid; grid-template-columns: 220px 170px 1fr 1fr 1fr; gap:8px; }
+    .pane { display:none; }
+    .pane.active { display:block; }
+    .table-wrap { overflow:auto; border:1px solid #d8e4f3; border-radius:8px; }
+    table { width:100%; border-collapse:collapse; min-width:980px; }
+    th, td { border-bottom:1px solid #e6eef8; padding:8px; font-size:12px; text-align:left; white-space:nowrap; }
+    th { color:#5f7190; font-size:11px; text-transform:uppercase; letter-spacing:.05em; background:#f8fbff; }
+    .muted { color:#7085a4; }
+    @media (max-width: 980px) { .row, .head { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Goals Admin</h1>
-    <div class="hint">Set quarter goal and cumulative month goals (M1, M2, M3). M3 is forced to the quarter goal. If M1/M2 are blank, they auto-fill evenly. Active Pipeline is fixed at 800,000 each month.</div>
-    <div class="card">
-      <div class="head"><div>Metric</div><div>Quarter Goal</div><div>Month1 Goal</div><div>Month2 Goal</div><div>Month3 Goal</div></div>
-      <div id="form"></div>
+    <div class="tabs">
+      <button class="tab active" id="tab-goals" type="button">Goals</button>
+      <button class="tab" id="tab-history" type="button">Historical</button>
     </div>
-    <div class="btns">
-      <button id="save">Save Goals</button>
-      <button id="reset">Reset Defaults</button>
-      <a href="dashboard_preview.html">Back To Dashboard</a>
+
+    <div class="pane active" id="pane-goals">
+      <div class="hint">Quarter goals are stored per quarter. M3 is forced to quarter goal. If M1/M2 are blank, they auto-fill evenly. Active Pipeline remains fixed at 800,000 each month.</div>
+      <div class="controls">
+        <label for="goal-quarter">Goal Quarter</label>
+        <select id="goal-quarter"></select>
+      </div>
+      <div class="card">
+        <div class="head">
+          <div>Metric</div><div>Quarter Goal</div><div id="m1h">Month1 Goal</div><div id="m2h">Month2 Goal</div><div id="m3h">Month3 Goal</div>
+        </div>
+        <div id="form"></div>
+      </div>
+      <div class="btns">
+        <button id="save">Save Goals</button>
+        <button id="reset">Reset Quarter Defaults</button>
+        <a href="dashboard_preview.html">Back To Dashboard</a>
+      </div>
+    </div>
+
+    <div class="pane" id="pane-history">
+      <div class="hint">Weekly snapshots are captured on dashboard generation runs. Use this to compare quarter progress week-over-week.</div>
+      <div class="controls">
+        <label for="history-quarter">History Quarter</label>
+        <select id="history-quarter"></select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Week Start</th><th>Snapshot Date</th><th>ARR</th><th>New Sales</th><th>Pipeline</th><th>New Customers</th><th>SQL</th><th>MQL</th><th>Renewals</th><th>NRR Cust</th><th>NRR $</th><th>Δ vs prior week</th>
+            </tr>
+          </thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -47,6 +91,26 @@
       qtd_billing_progress:'QTD Billing Goal'
     };
     const DEFAULT_GOALS = {"new_sales": {"quarter_goal": 36000, "month_goals": [null, null, null]}, "total_active_pipeline": {"quarter_goal": 800000, "month_goals": [800000, 800000, 800000]}, "new_customers": {"quarter_goal": 24, "month_goals": [null, null, null]}, "arr": {"quarter_goal": 1100000, "month_goals": [null, null, null]}, "sql": {"quarter_goal": 15, "month_goals": [null, null, null]}, "mql": {"quarter_goal": 75, "month_goals": [null, null, null]}, "renewals_number": {"quarter_goal": 150000, "month_goals": [null, null, null]}, "nrr_customer_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "nrr_dollar_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "qtd_billing_progress": {"quarter_goal": 350000, "month_goals": [null, null, null]}};
+    const CURRENT_QUARTER = "Q1-2026";
+    const HISTORY_DATA = [{"quarter": "Q1-2026", "quarter_anchor_date": "2026-02-23", "snapshot_date": "2026-02-24", "week_start": "2026-02-23", "generated_at_utc": "2026-02-24 06:51 UTC", "metrics": {"arr": 1053498.40088, "nrr_customer_pct": 0.8913043478260869, "nrr_dollar_pct": 0.9437845373561741, "renewals_number": 141061.24998999998, "new_sales": 17883.0, "total_active_pipeline": 629896.9801506, "new_customers": 8.0, "lost_customers": 0.0, "sql": 11.0, "mql": 92.0, "services_active_projects": 29.0, "services_closed_projects_this_quarter": 1.0, "services_avg_project_close_days_this_quarter": 51.59615384615385}}];
+    const GOALS_BY_QUARTER_KEY = 'dashboard_goals_by_quarter_v1';
+
+    function money(v) { return '$' + Number(v || 0).toLocaleString(undefined, {maximumFractionDigits:0}); }
+    function num(v) { return Number(v || 0).toLocaleString(undefined, {maximumFractionDigits:0}); }
+    function pct(v) { return (Number(v || 0) * 100).toFixed(1) + '%'; }
+
+    function quarterMonths(qLabel) {
+      const m = /^Q([1-4])-(\d{4})$/.exec(String(qLabel || '').trim());
+      if (!m) return ['Month1','Month2','Month3'];
+      const q = Number(m[1]);
+      const year = Number(m[2]);
+      const startMonth = (q - 1) * 3;
+      const names = [];
+      for (let i = 0; i < 3; i++) {
+        names.push(new Date(year, startMonth + i, 1).toLocaleString(undefined, { month: 'short' }));
+      }
+      return names;
+    }
 
     function normalizeGoalEntry(raw, fallback, metricKey = '') {
       if (metricKey === 'total_active_pipeline') {
@@ -68,30 +132,72 @@
       };
     }
 
-    function loadGoals() {
-      try {
-        const v2 = localStorage.getItem('dashboard_goals_v2');
-        if (v2) {
-          const parsed = JSON.parse(v2);
-          const out = {};
-          Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(parsed[k], DEFAULT_GOALS[k], k));
-          return out;
-        }
-        const v1 = localStorage.getItem('dashboard_goals_v1');
-        if (v1) {
-          const parsed = JSON.parse(v1);
-          const out = {};
-          Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(parsed[k], DEFAULT_GOALS[k], k));
-          return out;
-        }
-      } catch (e) {}
+    function defaultGoals() {
       const out = {};
       Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(DEFAULT_GOALS[k], DEFAULT_GOALS[k], k));
       return out;
     }
 
-    function render() {
-      const goals = loadGoals();
+    function loadGoalStore() {
+      try {
+        const raw = localStorage.getItem(GOALS_BY_QUARTER_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') return parsed;
+        }
+      } catch (e) {}
+      const migrated = {};
+      try {
+        const v2 = localStorage.getItem('dashboard_goals_v2');
+        if (v2) {
+          migrated[CURRENT_QUARTER] = JSON.parse(v2);
+          localStorage.setItem(GOALS_BY_QUARTER_KEY, JSON.stringify(migrated));
+          return migrated;
+        }
+      } catch (e) {}
+      return {};
+    }
+
+    function getQuarterGoals(quarter) {
+      const store = loadGoalStore();
+      const src = (store[quarter] && typeof store[quarter] === 'object') ? store[quarter] : defaultGoals();
+      const out = {};
+      Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(src[k], DEFAULT_GOALS[k], k));
+      return out;
+    }
+
+    function saveQuarterGoals(quarter, goals) {
+      const store = loadGoalStore();
+      store[quarter] = goals;
+      localStorage.setItem(GOALS_BY_QUARTER_KEY, JSON.stringify(store));
+      localStorage.setItem('dashboard_goals_v2', JSON.stringify(goals));
+    }
+
+    function availableQuarters() {
+      const set = new Set([CURRENT_QUARTER]);
+      HISTORY_DATA.forEach(row => { if (row && row.quarter) set.add(String(row.quarter)); });
+      const store = loadGoalStore();
+      Object.keys(store).forEach(q => set.add(q));
+      const parseQuarter = (q) => {
+        const m = /^Q([1-4])-(\d{4})$/.exec(String(q || ''));
+        if (!m) return [0, 0];
+        return [Number(m[2]), Number(m[1])];
+      };
+      return Array.from(set).sort((a,b) => {
+        const [ay, aq] = parseQuarter(a);
+        const [by, bq] = parseQuarter(b);
+        return ay === by ? aq - bq : ay - by;
+      });
+    }
+
+    function renderGoals() {
+      const qSel = document.getElementById('goal-quarter');
+      const quarter = qSel.value || CURRENT_QUARTER;
+      const goals = getQuarterGoals(quarter);
+      const months = quarterMonths(quarter);
+      document.getElementById('m1h').textContent = months[0] + ' Goal';
+      document.getElementById('m2h').textContent = months[1] + ' Goal';
+      document.getElementById('m3h').textContent = months[2] + ' Goal';
       const form = document.getElementById('form');
       form.innerHTML = Object.keys(LABELS).map(key => {
         const g = goals[key] || DEFAULT_GOALS[key];
@@ -110,8 +216,66 @@
       }).join('');
     }
 
+    function fmtDelta(curr, prev, kind) {
+      if (curr === null || curr === undefined || prev === null || prev === undefined) return 'n/a';
+      const d = Number(curr) - Number(prev);
+      if (!Number.isFinite(d)) return 'n/a';
+      if (kind === 'currency') return (d >= 0 ? '+' : '-') + money(Math.abs(d));
+      if (kind === 'percent') return (d >= 0 ? '+' : '') + (d * 100).toFixed(1) + 'pp';
+      return (d >= 0 ? '+' : '') + num(d);
+    }
+
+    function renderHistory() {
+      const q = document.getElementById('history-quarter').value || CURRENT_QUARTER;
+      const rows = HISTORY_DATA
+        .filter(r => String(r.quarter || '') === q)
+        .slice()
+        .sort((a,b) => String(b.week_start || '').localeCompare(String(a.week_start || '')));
+      const body = document.getElementById('history-body');
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="12" class="muted">No snapshots yet for this quarter.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map((row, idx) => {
+        const prev = rows[idx + 1];
+        const m = row.metrics || {};
+        const pm = prev ? (prev.metrics || {}) : null;
+        const deltaBits = pm ? [
+          `Sales ${fmtDelta(m.new_sales, pm.new_sales, 'currency')}`,
+          `SQL ${fmtDelta(m.sql, pm.sql, 'count')}`,
+          `MQL ${fmtDelta(m.mql, pm.mql, 'count')}`,
+          `ARR ${fmtDelta(m.arr, pm.arr, 'currency')}`
+        ].join(' | ') : 'Baseline week';
+        return `<tr>`
+          + `<td>${row.week_start || ''}</td>`
+          + `<td>${row.snapshot_date || ''}</td>`
+          + `<td>${money(m.arr)}</td>`
+          + `<td>${money(m.new_sales)}</td>`
+          + `<td>${money(m.total_active_pipeline)}</td>`
+          + `<td>${num(m.new_customers)}</td>`
+          + `<td>${num(m.sql)}</td>`
+          + `<td>${num(m.mql)}</td>`
+          + `<td>${money(m.renewals_number)}</td>`
+          + `<td>${pct(m.nrr_customer_pct)}</td>`
+          + `<td>${pct(m.nrr_dollar_pct)}</td>`
+          + `<td class="muted">${deltaBits}</td>`
+          + `</tr>`;
+      }).join('');
+    }
+
+    const goalQuarter = document.getElementById('goal-quarter');
+    const histQuarter = document.getElementById('history-quarter');
+    const quarters = availableQuarters();
+    goalQuarter.innerHTML = quarters.map(q => `<option value="${q}">${q}</option>`).join('');
+    histQuarter.innerHTML = quarters.map(q => `<option value="${q}">${q}</option>`).join('');
+    goalQuarter.value = CURRENT_QUARTER;
+    histQuarter.value = CURRENT_QUARTER;
+
+    goalQuarter.onchange = renderGoals;
+    histQuarter.onchange = renderHistory;
+
     document.getElementById('save').onclick = () => {
-      const goals = loadGoals();
+      const goals = getQuarterGoals(goalQuarter.value);
       document.querySelectorAll('input[data-k]').forEach(inp => {
         const k = inp.getAttribute('data-k');
         if (!goals[k]) goals[k] = { quarter_goal: 0, month_goals: [null, null, null] };
@@ -128,16 +292,32 @@
           goals[k].month_goals[i] = raw === '' ? null : Number(raw || 0);
         }
       });
-      localStorage.setItem('dashboard_goals_v2', JSON.stringify(goals));
-      alert('Goals saved. Refresh dashboard preview.');
+      saveQuarterGoals(goalQuarter.value, goals);
+      alert('Goals saved for ' + goalQuarter.value + '.');
     };
 
     document.getElementById('reset').onclick = () => {
-      localStorage.setItem('dashboard_goals_v2', JSON.stringify(DEFAULT_GOALS));
-      render();
+      saveQuarterGoals(goalQuarter.value, defaultGoals());
+      renderGoals();
     };
 
-    render();
+    function setTab(name) {
+      const goalsPane = document.getElementById('pane-goals');
+      const historyPane = document.getElementById('pane-history');
+      const goalsTab = document.getElementById('tab-goals');
+      const historyTab = document.getElementById('tab-history');
+      const goalsActive = name === 'goals';
+      goalsPane.classList.toggle('active', goalsActive);
+      historyPane.classList.toggle('active', !goalsActive);
+      goalsTab.classList.toggle('active', goalsActive);
+      historyTab.classList.toggle('active', !goalsActive);
+    }
+
+    document.getElementById('tab-goals').onclick = () => setTab('goals');
+    document.getElementById('tab-history').onclick = () => setTab('history');
+
+    renderGoals();
+    renderHistory();
   </script>
 </body>
 </html>
