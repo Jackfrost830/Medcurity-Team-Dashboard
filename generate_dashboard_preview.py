@@ -632,56 +632,6 @@ def main() -> None:
       }};
     }}
 
-    // Force hover/tooltip activation to match actual rendered point geometry.
-    function lockHoverToDots(chart, evt, dataValues, datasetIndex = 0, radiusPad = 0) {{
-      if (!chart || !evt) return;
-      const nativeEvt = evt.native || evt;
-      if (!nativeEvt) return;
-
-      if (nativeEvt.type === 'mouseout') {{
-        chart.setActiveElements([]);
-        if (chart.tooltip) chart.tooltip.setActiveElements([], {{ x: 0, y: 0 }});
-        chart.canvas.style.cursor = 'default';
-        chart.update('none');
-        return;
-      }}
-
-      const rel = Chart.helpers.getRelativePosition(nativeEvt, chart);
-      const meta = chart.getDatasetMeta(datasetIndex);
-      const points = (meta && Array.isArray(meta.data)) ? meta.data : [];
-      if (!points.length) return;
-
-      let best = null;
-      let bestDist = Infinity;
-      points.forEach((pt, idx) => {{
-        const v = Array.isArray(dataValues) ? dataValues[idx] : null;
-        if (v === null || v === undefined || !pt) return;
-        const props = pt.getProps(['x', 'y'], true);
-        const baseRadius = Number(pt.options?.radius ?? 0);
-        if (!(baseRadius > 0)) return;
-        const triggerRadius = baseRadius + Number(radiusPad || 0);
-        const dx = rel.x - props.x;
-        const dy = rel.y - props.y;
-        const d = Math.hypot(dx, dy);
-        if (d <= triggerRadius && d < bestDist) {{
-          bestDist = d;
-          best = {{ idx, x: props.x, y: props.y }};
-        }}
-      }});
-
-      if (best) {{
-        const active = [{{ datasetIndex, index: best.idx }}];
-        chart.setActiveElements(active);
-        if (chart.tooltip) chart.tooltip.setActiveElements(active, {{ x: best.x, y: best.y }});
-        chart.canvas.style.cursor = 'pointer';
-      }} else {{
-        chart.setActiveElements([]);
-        if (chart.tooltip) chart.tooltip.setActiveElements([], {{ x: rel.x, y: rel.y }});
-        chart.canvas.style.cursor = 'default';
-      }}
-      chart.update('none');
-    }}
-
     function fmtByKind(kind, value) {{
       if (value === null || value === undefined) return '';
       if (kind === 'currency') return money(value);
@@ -876,12 +826,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'point', intersect: true }},
-          onHover: (evt, _active, chart) => lockHoverToDots(chart, evt, actual, 0, 0),
+          interaction: {{ mode: 'index', axis: 'x', intersect: false }},
           layout: {{ padding: layoutPadding }},
           plugins: {{
             legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }},
-            tooltip: {{ mode: 'point', intersect: true }}
+            tooltip: {{ mode: 'index', axis: 'x', intersect: false }}
           }},
           scales: {{
             y: {{
@@ -925,12 +874,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'point', intersect: true }},
-          onHover: (evt, _active, chart) => lockHoverToDots(chart, evt, values, 0, 0),
+          interaction: {{ mode: 'index', axis: 'x', intersect: false }},
           layout: {{ padding: {{ top: 14, right: 14, left: 16, bottom: 6 }} }},
           plugins: {{
             legend: {{ display: false }},
-            tooltip: {{ mode: 'point', intersect: true }}
+            tooltip: {{ mode: 'index', axis: 'x', intersect: false }}
           }},
           scales: {{
             y: {{ beginAtZero: false, grid: {{ color: ui.grid }}, ticks: {{ color: ui.muted, padding: 6, callback: (v) => money(v) }} }},
@@ -993,12 +941,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'point', intersect: true }},
-          onHover: (evt, _active, chart) => lockHoverToDots(chart, evt, values, 0, 0),
+          interaction: {{ mode: 'index', axis: 'x', intersect: false }},
           layout: {{ padding: {{ top: 14, right: 14, left: 16, bottom: 6 }} }},
           plugins: {{
             legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }},
-            tooltip: {{ mode: 'point', intersect: true }}
+            tooltip: {{ mode: 'index', axis: 'x', intersect: false }}
           }},
           scales: {{
             y: {{ beginAtZero: false, min: 0.6, max: 1.0, grid: {{ color: ui.grid }}, ticks: {{ color: ui.muted, padding: 6, callback: (v) => pct(v) }} }},
