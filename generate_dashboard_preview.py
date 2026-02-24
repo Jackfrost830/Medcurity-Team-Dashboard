@@ -1545,6 +1545,10 @@ def main() -> None:
             m0 = qGoal / 3; m1 = (qGoal * 2) / 3; m2 = qGoal;
           }}
         }}
+        if (!locked && !isNrr) {{
+          const qGoal = Number(g.quarter_goal || 0);
+          if (qGoal > 0) m2 = qGoal;
+        }}
         const ro = locked ? 'readonly' : '';
         return `<div class=\"row\">`
           + `<div><strong>${{LABELS[key]}}</strong></div>`
@@ -1571,9 +1575,12 @@ def main() -> None:
         const inputs = Array.from(document.querySelectorAll(`input[data-k=\"${{key}}\"][data-f=\"month_goal\"]`));
         if (inputs.length !== 3) return;
         const allBlank = inputs.every(inp => String(inp.value || '').trim() === '');
-        if (!allBlank) return;
         const vals = [qGoal / 3, (qGoal * 2) / 3, qGoal].map(v => Math.round(v * 100) / 100);
-        inputs.forEach((inp, idx) => inp.value = vals[idx] ? String(vals[idx]) : '');
+        if (allBlank) {{
+          inputs.forEach((inp, idx) => inp.value = vals[idx] ? String(vals[idx]) : '');
+        }} else {{
+          inputs[2].value = vals[2] ? String(vals[2]) : '';
+        }}
       }};
       document.querySelectorAll('input[data-f=\"quarter_goal\"]').forEach(inp => {{
         inp.addEventListener('change', () => applyEvenSplit(inp));
@@ -1688,6 +1695,20 @@ def main() -> None:
             goals[k].month_goals[i] = raw === '' ? null : Number(raw || 0);
           }}
         }}
+      }});
+      Object.keys(goals).forEach(k => {{
+        if (k === 'total_active_pipeline') {{
+          goals[k] = {{ quarter_goal: 800000, month_goals: [800000, 800000, 800000] }};
+          return;
+        }}
+        if (k === 'nrr_customer_pct' || k === 'nrr_dollar_pct') {{
+          const q = Number(goals[k]?.quarter_goal || 0);
+          goals[k].month_goals = [q, q, q];
+          return;
+        }}
+        if (!Array.isArray(goals[k].month_goals)) goals[k].month_goals = [null, null, null];
+        const q = Number(goals[k].quarter_goal || 0);
+        if (q > 0) goals[k].month_goals[2] = q;
       }});
       saveQuarterGoals(goalQuarter.value, goals);
       setQuarterLocked(goalQuarter.value, true);
