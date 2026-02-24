@@ -767,7 +767,6 @@ def main() -> None:
       const layoutPadding = metricKey === 'sql'
         ? {{ top: 20, right: 26, left: 16, bottom: 8 }}
         : {{ top: 14, right: 14, left: 16, bottom: 6 }};
-      const hoverThresholdPx = metricKey === 'new_sales' ? 10 : 8;
 
       new Chart(document.getElementById('c-' + metricKey), {{
         type: 'line',
@@ -829,31 +828,26 @@ def main() -> None:
           maintainAspectRatio: false,
           interaction: {{ mode: 'point', intersect: true }},
           onHover: (evt, _active, chart) => {{
-            const meta = chart.getDatasetMeta(0);
-            const points = (meta && Array.isArray(meta.data)) ? meta.data : [];
-            if (!points.length || !evt) return;
-            let nearestIdx = -1;
-            let nearestDist = Infinity;
-            points.forEach((pt, idx) => {{
-              if (!pt) return;
-              const yVal = actual[idx];
-              if (yVal === null || yVal === undefined) return;
-              const dx = evt.x - pt.x;
-              const dy = evt.y - pt.y;
-              const d = Math.hypot(dx, dy);
-              if (d < nearestDist) {{
-                nearestDist = d;
-                nearestIdx = idx;
-              }}
-            }});
-            if (nearestIdx >= 0 && nearestDist <= hoverThresholdPx) {{
-              const activeEl = [{{ datasetIndex: 0, index: nearestIdx }}];
+            if (metricKey !== 'new_sales') return;
+            const eventForHit = evt?.native || evt;
+            const hits = chart.getElementsAtEventForMode(
+              eventForHit,
+              'nearest',
+              {{ intersect: true }},
+              true
+            ) || [];
+            const pointHit = hits.find(h => h.datasetIndex === 0 && actual[h.index] !== null && actual[h.index] !== undefined);
+            if (pointHit) {{
+              const activeEl = [{{ datasetIndex: 0, index: pointHit.index }}];
               chart.setActiveElements(activeEl);
-              if (chart.tooltip) chart.tooltip.setActiveElements(activeEl, {{ x: evt.x, y: evt.y }});
+              if (chart.tooltip) {{
+                const el = pointHit.element || {{}};
+                chart.tooltip.setActiveElements(activeEl, {{ x: el.x || 0, y: el.y || 0 }});
+              }}
               chart.canvas.style.cursor = 'pointer';
             }} else {{
               chart.setActiveElements([]);
-              if (chart.tooltip) chart.tooltip.setActiveElements([], {{ x: evt.x, y: evt.y }});
+              if (chart.tooltip) chart.tooltip.setActiveElements([], {{ x: 0, y: 0 }});
               chart.canvas.style.cursor = 'default';
             }}
             chart.update('none');
