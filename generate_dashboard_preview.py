@@ -1348,7 +1348,6 @@ def main() -> None:
       new_sales:'New Sales',
       total_active_pipeline:'Total Active Pipeline',
       new_customers:'New Customers',
-      arr:'ARR',
       sql:'SQL',
       mql:'MQL',
       renewals_number:'Renewals',
@@ -1392,11 +1391,18 @@ def main() -> None:
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
       }});
-      const month_splits = (src?.month_splits || [null, null, null]).map(v => {{
+      let month_splits = (src?.month_splits || [null, null, null]).map(v => {{
         if (v === null || v === undefined || v === '') return null;
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
       }});
+      if ((month_splits[0] === null && month_splits[1] === null && month_splits[2] === null)
+          && (month_goals[0] !== null || month_goals[1] !== null || month_goals[2] !== null)) {{
+        const c0 = Number(month_goals[0] || 0);
+        const c1 = Number(month_goals[1] || c0);
+        const c2 = Number(month_goals[2] || 0);
+        month_splits = [c0, Math.max(c1 - c0, 0), Math.max(c2 - c1, 0)];
+      }}
       return {{
         quarter_goal: Number(src?.quarter_goal ?? fallback.quarter_goal ?? 0),
         month_goals,

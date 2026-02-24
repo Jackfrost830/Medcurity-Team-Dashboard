@@ -82,7 +82,6 @@
       new_sales:'New Sales',
       total_active_pipeline:'Total Active Pipeline',
       new_customers:'New Customers',
-      arr:'ARR',
       sql:'SQL',
       mql:'MQL',
       renewals_number:'Renewals',
@@ -92,7 +91,7 @@
     };
     const DEFAULT_GOALS = {"new_sales": {"quarter_goal": 36000, "month_goals": [null, null, null]}, "total_active_pipeline": {"quarter_goal": 800000, "month_goals": [800000, 800000, 800000]}, "new_customers": {"quarter_goal": 24, "month_goals": [null, null, null]}, "arr": {"quarter_goal": 1100000, "month_goals": [null, null, null]}, "sql": {"quarter_goal": 15, "month_goals": [null, null, null]}, "mql": {"quarter_goal": 75, "month_goals": [null, null, null]}, "renewals_number": {"quarter_goal": 150000, "month_goals": [null, null, null]}, "nrr_customer_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "nrr_dollar_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "qtd_billing_progress": {"quarter_goal": 350000, "month_goals": [null, null, null]}};
     const CURRENT_QUARTER = "Q1-2026";
-    const HISTORY_DATA = [{"quarter": "Q1-2026", "quarter_anchor_date": "2026-02-23", "snapshot_date": "2026-02-24", "week_start": "2026-02-23", "generated_at_utc": "2026-02-24 07:00 UTC", "metrics": {"arr": 1053498.40088, "nrr_customer_pct": 0.8913043478260869, "nrr_dollar_pct": 0.9437845373561741, "renewals_number": 141061.24998999998, "new_sales": 17883.0, "total_active_pipeline": 629896.9801506, "new_customers": 8.0, "lost_customers": 0.0, "sql": 11.0, "mql": 92.0, "services_active_projects": 29.0, "services_closed_projects_this_quarter": 1.0, "services_avg_project_close_days_this_quarter": 51.59615384615385}}];
+    const HISTORY_DATA = [{"quarter": "Q1-2026", "quarter_anchor_date": "2026-02-23", "snapshot_date": "2026-02-24", "week_start": "2026-02-23", "generated_at_utc": "2026-02-24 07:02 UTC", "metrics": {"arr": 1053498.40088, "nrr_customer_pct": 0.8913043478260869, "nrr_dollar_pct": 0.9437845373561741, "renewals_number": 141061.24998999998, "new_sales": 17883.0, "total_active_pipeline": 629896.9801506, "new_customers": 8.0, "lost_customers": 0.0, "sql": 11.0, "mql": 92.0, "services_active_projects": 29.0, "services_closed_projects_this_quarter": 1.0, "services_avg_project_close_days_this_quarter": 51.59615384615385}}];
     const GOALS_BY_QUARTER_KEY = 'dashboard_goals_by_quarter_v1';
 
     function money(v) { return '$' + Number(v || 0).toLocaleString(undefined, {maximumFractionDigits:0}); }
@@ -126,11 +125,18 @@
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
       });
-      const month_splits = (src?.month_splits || [null, null, null]).map(v => {
+      let month_splits = (src?.month_splits || [null, null, null]).map(v => {
         if (v === null || v === undefined || v === '') return null;
         const n = Number(v);
         return Number.isFinite(n) ? n : null;
       });
+      if ((month_splits[0] === null && month_splits[1] === null && month_splits[2] === null)
+          && (month_goals[0] !== null || month_goals[1] !== null || month_goals[2] !== null)) {
+        const c0 = Number(month_goals[0] || 0);
+        const c1 = Number(month_goals[1] || c0);
+        const c2 = Number(month_goals[2] || 0);
+        month_splits = [c0, Math.max(c1 - c0, 0), Math.max(c2 - c1, 0)];
+      }
       return {
         quarter_goal: Number(src?.quarter_goal ?? fallback.quarter_goal ?? 0),
         month_goals,
