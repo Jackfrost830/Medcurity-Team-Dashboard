@@ -248,7 +248,7 @@
     const ARR_HISTORY = [{"quarter": "Q2-2024", "value": 920441.25}, {"quarter": "Q3-2024", "value": 941425.5}, {"quarter": "Q4-2024", "value": 957989.0}, {"quarter": "Q1-2025", "value": 973958.55005}, {"quarter": "Q2-2025", "value": 991001.15005}, {"quarter": "Q3-2025", "value": 1003099.65005}, {"quarter": "Q4-2025", "value": 1005173.65088}, {"quarter": "Q1-2026", "value": 1053498.40088}];
     const NRR_DOLLAR_HISTORY = [{"quarter": "Q1-2025", "value": 0.8792408210768073}, {"quarter": "Q2-2025", "value": 0.8413659273760765}, {"quarter": "Q3-2025", "value": 0.9333100067635891}, {"quarter": "Q4-2025", "value": 0.8400561472863652}, {"quarter": "Q1-2026", "value": 0.9437845373561741}];
     const NRR_CUSTOMER_HISTORY = [{"quarter": "Q1-2025", "value": 0.8620689655172413}, {"quarter": "Q2-2025", "value": 0.7441860465116279}, {"quarter": "Q3-2025", "value": 0.9130434782608696}, {"quarter": "Q4-2025", "value": 0.8771929824561404}, {"quarter": "Q1-2026", "value": 0.8913043478260869}];
-    const GENERATED_AT = "2026-02-24 07:23 UTC";
+    const GENERATED_AT = "2026-02-24 07:34 UTC";
     const CURRENT_QUARTER = "Q1-2026";
     const VIEW_ONLY = false;
     if (VIEW_ONLY) document.documentElement.classList.add('view-only');
@@ -380,13 +380,17 @@
         const v = Number((g.month_goals && g.month_goals[0]) || g.quarter_goal || 0.9);
         return { monthly: [v, v, v], cumulative: [v, v, v] };
       }
+      if (metricKey === 'qtd_billing_progress') {
+        const m = Array.isArray(g.month_goals) ? g.month_goals : [null, null, null];
+        if (m.every(v => v === null || v === undefined)) return { monthly: [0, 0, 0], cumulative: [0, 0, 0] };
+      }
       const targetQuarter = Number(g.quarter_goal || 0);
       let cum = [...(g.month_goals || [null, null, null])];
       if (cum.every(v => v === null || v === undefined)) {
-        cum = [targetQuarter / 3, (targetQuarter * 2) / 3, targetQuarter];
+        cum = [Math.ceil(targetQuarter / 3), Math.ceil((targetQuarter * 2) / 3), targetQuarter];
       } else {
-        if (cum[0] === null || cum[0] === undefined) cum[0] = targetQuarter / 3;
-        if (cum[1] === null || cum[1] === undefined) cum[1] = (targetQuarter * 2) / 3;
+        if (cum[0] === null || cum[0] === undefined) cum[0] = Math.ceil(targetQuarter / 3);
+        if (cum[1] === null || cum[1] === undefined) cum[1] = Math.ceil((targetQuarter * 2) / 3);
         if (cum[2] === null || cum[2] === undefined) cum[2] = targetQuarter;
       }
       cum = cum.map(v => Number(v || 0));

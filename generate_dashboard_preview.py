@@ -572,13 +572,17 @@ def main() -> None:
         const v = Number((g.month_goals && g.month_goals[0]) || g.quarter_goal || 0.9);
         return {{ monthly: [v, v, v], cumulative: [v, v, v] }};
       }}
+      if (metricKey === 'qtd_billing_progress') {{
+        const m = Array.isArray(g.month_goals) ? g.month_goals : [null, null, null];
+        if (m.every(v => v === null || v === undefined)) return {{ monthly: [0, 0, 0], cumulative: [0, 0, 0] }};
+      }}
       const targetQuarter = Number(g.quarter_goal || 0);
       let cum = [...(g.month_goals || [null, null, null])];
       if (cum.every(v => v === null || v === undefined)) {{
-        cum = [targetQuarter / 3, (targetQuarter * 2) / 3, targetQuarter];
+        cum = [Math.ceil(targetQuarter / 3), Math.ceil((targetQuarter * 2) / 3), targetQuarter];
       }} else {{
-        if (cum[0] === null || cum[0] === undefined) cum[0] = targetQuarter / 3;
-        if (cum[1] === null || cum[1] === undefined) cum[1] = (targetQuarter * 2) / 3;
+        if (cum[0] === null || cum[0] === undefined) cum[0] = Math.ceil(targetQuarter / 3);
+        if (cum[1] === null || cum[1] === undefined) cum[1] = Math.ceil((targetQuarter * 2) / 3);
         if (cum[2] === null || cum[2] === undefined) cum[2] = targetQuarter;
       }}
       cum = cum.map(v => Number(v || 0));
@@ -1541,11 +1545,11 @@ def main() -> None:
         }}
         if ((m0 === null || m0 === undefined) && (m1 === null || m1 === undefined) && (m2 === null || m2 === undefined)) {{
           const qGoal = Number(g.quarter_goal || 0);
-          if (qGoal > 0) {{
-            m0 = qGoal / 3; m1 = (qGoal * 2) / 3; m2 = qGoal;
+          if (qGoal > 0 && key !== 'qtd_billing_progress') {{
+            m0 = Math.ceil(qGoal / 3); m1 = Math.ceil((qGoal * 2) / 3); m2 = qGoal;
           }}
         }}
-        if (!locked && !isNrr) {{
+        if (!locked && !isNrr && key !== 'qtd_billing_progress') {{
           const qGoal = Number(g.quarter_goal || 0);
           if (qGoal > 0) m2 = qGoal;
         }}
@@ -1561,6 +1565,7 @@ def main() -> None:
 
       const applyEvenSplit = (goalInput) => {{
         const key = goalInput.getAttribute('data-k');
+        if (key === 'qtd_billing_progress') return;
         if (key === 'nrr_customer_pct' || key === 'nrr_dollar_pct') {{
           const qGoal = Number(goalInput.value || 0);
           if (!Number.isFinite(qGoal)) return;
@@ -1575,7 +1580,7 @@ def main() -> None:
         const inputs = Array.from(document.querySelectorAll(`input[data-k=\"${{key}}\"][data-f=\"month_goal\"]`));
         if (inputs.length !== 3) return;
         const allBlank = inputs.every(inp => String(inp.value || '').trim() === '');
-        const vals = [qGoal / 3, (qGoal * 2) / 3, qGoal].map(v => Math.round(v * 100) / 100);
+        const vals = [Math.ceil(qGoal / 3), Math.ceil((qGoal * 2) / 3), qGoal];
         if (allBlank) {{
           inputs.forEach((inp, idx) => inp.value = vals[idx] ? String(vals[idx]) : '');
         }} else {{
@@ -1708,7 +1713,7 @@ def main() -> None:
         }}
         if (!Array.isArray(goals[k].month_goals)) goals[k].month_goals = [null, null, null];
         const q = Number(goals[k].quarter_goal || 0);
-        if (q > 0) goals[k].month_goals[2] = q;
+        if (k !== 'qtd_billing_progress' && q > 0) goals[k].month_goals[2] = q;
       }});
       saveQuarterGoals(goalQuarter.value, goals);
       setQuarterLocked(goalQuarter.value, true);
