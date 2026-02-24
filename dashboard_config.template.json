@@ -21,7 +21,8 @@
   ],
   "salesforce_financial_model": {
     "report_id": "00O5w000009E4ZyEAK",
-    "owner_filter": "Consolidated"
+    "owner_filter": "Consolidated",
+    "window_mode": "quarter_last_year"
   },
   "salesforce_quarter_metrics": {
     "renewals_number": {
