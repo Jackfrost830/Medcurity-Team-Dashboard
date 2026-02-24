@@ -90,30 +90,32 @@ def main() -> None:
       --bg:#f3f7fc; --card:#ffffff; --cardSoft:#fbfdff; --ink:#0f2747; --muted:#5f7190; --line:#d8e4f3;
       --green:#39b36b; --yellow:#d9a620; --red:#d44f4f; --goal:#2b76c9; --arr:#1f7bc6;
       --grid:rgba(15,39,71,.13);
+      --bgTop:#f8fbff;
+      --glow:rgba(111,170,228,.30);
     }}
     [data-theme=\"dark\"] {{
       --bg:#0d1624; --card:#111f32; --cardSoft:#15263d; --ink:#e7f0fd; --muted:#9fb3ce; --line:#2a3e59;
       --green:#49c67b; --yellow:#e1b63d; --red:#e26a6a; --goal:#6aa9ff; --arr:#69b5ff;
       --grid:rgba(231,240,253,.16);
+      --bgTop:#0f1b2d;
+      --glow:rgba(35,91,152,.18);
     }}
     * {{ box-sizing: border-box; }}
-    body {{ margin:0; font-family: "Avenir Next", "Manrope", "SF Pro Text", "Segoe UI", sans-serif; color:var(--ink); background:radial-gradient(1200px 580px at 90% -14%, rgba(111,170,228,.38) 0%, transparent 62%), linear-gradient(180deg,#f8fbff 0%, var(--bg) 34%); transition:background .2s ease,color .2s ease; }}
+    body {{ margin:0; font-family: "Avenir Next", "Manrope", "SF Pro Text", "Segoe UI", sans-serif; color:var(--ink); background:radial-gradient(1200px 580px at 90% -14%, var(--glow) 0%, transparent 62%), linear-gradient(180deg,var(--bgTop) 0%, var(--bg) 34%); transition:background .2s ease,color .2s ease; }}
     .wrap {{ max-width:1760px; margin:16px auto; padding:0 20px 22px; }}
     .top {{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }}
-    h1 {{ margin:0; font-size:34px; letter-spacing:.01em; }}
+    h1 {{ margin:0; font-size:34px; letter-spacing:.01em; color:var(--ink); }}
     .stamp {{
-      text-align:right;
-      color:var(--muted);
-      font-size:12px;
-      line-height:1.25;
+      text-align:right; color:var(--muted); font-size:12px; line-height:1.25;
       border:1px solid var(--line);
       border-radius:999px;
-      padding:6px 10px;
+      padding:7px 12px;
       background:var(--cardSoft);
-      min-width:320px;
+      min-width:340px;
+      box-shadow:0 3px 10px rgba(19,40,68,.07);
     }}
-    .stamp-main {{ color:var(--ink); font-weight:700; font-size:12px; }}
-    .stamp-sub {{ margin-top:2px; font-size:11px; }}
+    .stamp-main {{ color:var(--ink); font-weight:700; font-size:12px; letter-spacing:.01em; }}
+    .stamp-sub {{ margin-top:2px; font-size:11px; opacity:.92; }}
     .actions {{ display:flex; gap:8px; }}
     .actions a, .actions button {{ color:var(--ink); text-decoration:none; font-weight:700; border:1px solid var(--line); padding:7px 10px; border-radius:8px; background:var(--card); cursor:pointer; }}
     .sections {{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start; }}
@@ -885,10 +887,10 @@ def main() -> None:
     const stampSubEl = document.getElementById('stamp-sub');
     const now = new Date();
     if (stampMainEl) {{
-      stampMainEl.textContent = 'As of ' + now.toLocaleDateString(undefined, {{ weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }});
+      stampMainEl.textContent = 'Updated ' + now.toLocaleDateString(undefined, {{ month: 'short', day: 'numeric', year: 'numeric' }});
     }}
     if (stampSubEl) {{
-      stampSubEl.textContent = 'Data updated: ' + GENERATED_AT;
+      stampSubEl.textContent = 'Salesforce sync: ' + GENERATED_AT;
     }}
     document.getElementById('k-arr').textContent = money((dash.arr || {{}}).value || (sf.arr || {{}}).value || 0);
     document.getElementById('k-new-customers').textContent = num((sf.new_customers || {{}}).qtd_total || 0);
