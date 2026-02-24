@@ -248,7 +248,7 @@
     const ARR_HISTORY = [{"quarter": "Q2-2024", "value": 920441.25}, {"quarter": "Q3-2024", "value": 941425.5}, {"quarter": "Q4-2024", "value": 957989.0}, {"quarter": "Q1-2025", "value": 973958.55005}, {"quarter": "Q2-2025", "value": 991001.15005}, {"quarter": "Q3-2025", "value": 1003099.65005}, {"quarter": "Q4-2025", "value": 1005173.65088}, {"quarter": "Q1-2026", "value": 1053498.40088}];
     const NRR_DOLLAR_HISTORY = [{"quarter": "Q1-2025", "value": 0.8792408210768073}, {"quarter": "Q2-2025", "value": 0.8413659273760765}, {"quarter": "Q3-2025", "value": 0.9333100067635891}, {"quarter": "Q4-2025", "value": 0.8400561472863652}, {"quarter": "Q1-2026", "value": 0.9407185621280181}];
     const NRR_CUSTOMER_HISTORY = [{"quarter": "Q1-2025", "value": 0.8620689655172413}, {"quarter": "Q2-2025", "value": 0.7441860465116279}, {"quarter": "Q3-2025", "value": 0.9130434782608696}, {"quarter": "Q4-2025", "value": 0.8771929824561404}, {"quarter": "Q1-2026", "value": 0.8864628820960698}];
-    const GENERATED_AT = "2026-02-24 19:41 UTC";
+    const GENERATED_AT = "2026-02-24 19:43 UTC";
     const CURRENT_QUARTER = "Q1-2026";
     const VIEW_ONLY = true;
     if (VIEW_ONLY) document.documentElement.classList.add('view-only');
@@ -656,7 +656,48 @@
       const labels = ARR_HISTORY.map(p => p.quarter);
       const values = ARR_HISTORY.map(p => Number(p.value || 0));
       const ui = chartUi();
+      const arrPointHoverPlugin = {
+        id: 'arrPointHoverPlugin',
+        afterEvent(chart, args) {
+          const evt = args.event;
+          if (!evt) return;
+          if (evt.type === 'mouseout') {
+            chart.setActiveElements([]);
+            chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+            chart.update('none');
+            return;
+          }
+          if (evt.type !== 'mousemove') return;
+          const meta = chart.getDatasetMeta(0);
+          const points = meta?.data || [];
+          if (!points.length) return;
+          let nearest = null;
+          let best = Infinity;
+          for (let i = 0; i < points.length; i++) {
+            const pt = points[i];
+            const dx = evt.x - pt.x;
+            const dy = evt.y - pt.y;
+            const d = Math.hypot(dx, dy);
+            if (d < best) {
+              best = d;
+              nearest = { i, pt };
+            }
+          }
+          const threshold = 9;
+          if (nearest && best <= threshold) {
+            const active = [{ datasetIndex: 0, index: nearest.i }];
+            chart.setActiveElements(active);
+            chart.tooltip.setActiveElements(active, { x: nearest.pt.x, y: nearest.pt.y });
+            chart.update('none');
+          } else {
+            chart.setActiveElements([]);
+            chart.tooltip.setActiveElements([], { x: evt.x, y: evt.y });
+            chart.update('none');
+          }
+        }
+      };
       new Chart(document.getElementById('c-arr_history'), {
+        plugins: [arrPointHoverPlugin],
         type: 'line',
         data: {
           labels,
@@ -677,11 +718,11 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          interaction: { mode: 'nearest', axis: 'xy', intersect: true },
+          interaction: { mode: 'nearest', axis: 'xy', intersect: false },
           layout: { padding: { top: 14, right: 14, left: 16, bottom: 6 } },
           plugins: {
             legend: { display: false },
-            tooltip: { mode: 'nearest', intersect: true }
+            tooltip: { mode: 'nearest', intersect: false }
           },
           scales: {
             y: { beginAtZero: false, grid: { color: ui.grid }, ticks: { color: ui.muted, padding: 6, callback: (v) => money(v) } },

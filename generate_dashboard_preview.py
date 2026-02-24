@@ -848,7 +848,48 @@ def main() -> None:
       const labels = ARR_HISTORY.map(p => p.quarter);
       const values = ARR_HISTORY.map(p => Number(p.value || 0));
       const ui = chartUi();
+      const arrPointHoverPlugin = {{
+        id: 'arrPointHoverPlugin',
+        afterEvent(chart, args) {{
+          const evt = args.event;
+          if (!evt) return;
+          if (evt.type === 'mouseout') {{
+            chart.setActiveElements([]);
+            chart.tooltip.setActiveElements([], {{ x: 0, y: 0 }});
+            chart.update('none');
+            return;
+          }}
+          if (evt.type !== 'mousemove') return;
+          const meta = chart.getDatasetMeta(0);
+          const points = meta?.data || [];
+          if (!points.length) return;
+          let nearest = null;
+          let best = Infinity;
+          for (let i = 0; i < points.length; i++) {{
+            const pt = points[i];
+            const dx = evt.x - pt.x;
+            const dy = evt.y - pt.y;
+            const d = Math.hypot(dx, dy);
+            if (d < best) {{
+              best = d;
+              nearest = {{ i, pt }};
+            }}
+          }}
+          const threshold = 9;
+          if (nearest && best <= threshold) {{
+            const active = [{{ datasetIndex: 0, index: nearest.i }}];
+            chart.setActiveElements(active);
+            chart.tooltip.setActiveElements(active, {{ x: nearest.pt.x, y: nearest.pt.y }});
+            chart.update('none');
+          }} else {{
+            chart.setActiveElements([]);
+            chart.tooltip.setActiveElements([], {{ x: evt.x, y: evt.y }});
+            chart.update('none');
+          }}
+        }}
+      }};
       new Chart(document.getElementById('c-arr_history'), {{
+        plugins: [arrPointHoverPlugin],
         type: 'line',
         data: {{
           labels,
@@ -869,11 +910,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'nearest', axis: 'xy', intersect: true }},
+          interaction: {{ mode: 'nearest', axis: 'xy', intersect: false }},
           layout: {{ padding: {{ top: 14, right: 14, left: 16, bottom: 6 }} }},
           plugins: {{
             legend: {{ display: false }},
-            tooltip: {{ mode: 'nearest', intersect: true }}
+            tooltip: {{ mode: 'nearest', intersect: false }}
           }},
           scales: {{
             y: {{ beginAtZero: false, grid: {{ color: ui.grid }}, ticks: {{ color: ui.muted, padding: 6, callback: (v) => money(v) }} }},
