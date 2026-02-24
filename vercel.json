@@ -1,7 +1,4 @@
 {
   "cleanUrls": true,
-  "trailingSlash": false,
-  "rewrites": [
-    { "source": "/", "destination": "/dashboard_team_view.html" }
-  ]
+  "trailingSlash": false
 }

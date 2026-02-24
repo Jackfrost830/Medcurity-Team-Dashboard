@@ -5,6 +5,7 @@ from pathlib import Path
 INPUT = Path("dashboard_metrics_output.json")
 DASHBOARD_OUTPUT = Path("dashboard_preview.html")
 TEAM_OUTPUT = Path("dashboard_team_view.html")
+INDEX_OUTPUT = Path("index.html")
 GOALS_OUTPUT = Path("goals_admin.html")
 GOALS_JSON = Path("dashboard_goals.json")
 
@@ -1202,9 +1203,11 @@ def main() -> None:
 
     DASHBOARD_OUTPUT.write_text(dashboard_html)
     TEAM_OUTPUT.write_text(team_view_html)
+    INDEX_OUTPUT.write_text(team_view_html)
     GOALS_OUTPUT.write_text(goals_html)
     print(f"Wrote {DASHBOARD_OUTPUT}")
     print(f"Wrote {TEAM_OUTPUT}")
+    print(f"Wrote {INDEX_OUTPUT}")
     print(f"Wrote {GOALS_OUTPUT}")
     print(f"Wrote {GOALS_JSON}")
 
