@@ -750,11 +750,11 @@ def main() -> None:
       const ui = chartUi();
       const colorByStatus = (s) => s === 'green' ? ui.green : (s === 'yellow' ? ui.yellow : (s === 'red' ? ui.red : ui.clear));
       const isPipeline = metricKey === 'total_active_pipeline';
-      const actualPointRadius = 5;
-      const actualPointHoverRadius = 6;
-      const actualPointHitRadius = 0;
-      const goalPointHoverRadius = 6;
-      const goalPointHitRadius = 0;
+      const actualPointRadius = 6;
+      const actualPointHoverRadius = 7;
+      const actualPointHitRadius = 4;
+      const goalPointHoverRadius = 7;
+      const goalPointHitRadius = 4;
       let yMax = isPipeline ? 1000000 : undefined;
       if (metricKey === 'sql') {{
         const top = Math.max(
@@ -803,7 +803,7 @@ def main() -> None:
               borderColor: ui.goal,
               borderWidth: 2,
               borderDash: [6,4],
-              pointRadius: goals.map((v, i) => (v === null || i !== currentIndex) ? 0 : 4),
+              pointRadius: goals.map((v, i) => (v === null || i !== currentIndex) ? 0 : 5),
               pointHoverRadius: goals.map(v => v === null ? 0 : goalPointHoverRadius),
               pointHitRadius: goalPointHitRadius,
               pointBackgroundColor: ui.goal,
@@ -862,9 +862,9 @@ def main() -> None:
             data: values,
             borderColor: ui.arr,
             borderWidth: 3,
-            pointRadius: 4,
-            pointHoverRadius: 7,
-            pointHitRadius: 0,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            pointHitRadius: 4,
             pointBackgroundColor: ui.arr,
             tension: 0.2,
             fill: false,
@@ -912,9 +912,9 @@ def main() -> None:
               label,
               data: values,
               borderWidth: 3,
-              pointRadius: 3,
-              pointHoverRadius: 6,
-              pointHitRadius: 0,
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              pointHitRadius: 4,
               pointBackgroundColor: statuses.map(s => colorByStatus(s)),
               pointBorderColor: statuses.map(s => colorByStatus(s)),
               segment: {{ borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) }},
@@ -928,9 +928,9 @@ def main() -> None:
               borderColor: ui.goal,
               borderWidth: 2,
               borderDash: [6,4],
-              pointRadius: labels.map((_, i) => i === currentIndex ? 4 : 0),
-              pointHoverRadius: labels.map((_, i) => i === currentIndex ? 6 : 0),
-              pointHitRadius: 0,
+              pointRadius: labels.map((_, i) => i === currentIndex ? 5 : 0),
+              pointHoverRadius: labels.map((_, i) => i === currentIndex ? 7 : 0),
+              pointHitRadius: 4,
               pointBackgroundColor: ui.goal,
               tension: 0,
               fill: false,
@@ -961,7 +961,7 @@ def main() -> None:
       const total = Number(services.active_projects || 0);
       const healthy = Math.max(total - flagged, 0);
       const atRisk = Math.max(flagged, 0);
-      const healthPct = total > 0 ? Math.round((healthy / total) * 100) : 100;
+      const centerCount = total;
       const ui = chartUi();
       const centerTextPlugin = {{
         id: 'centerText',
@@ -976,7 +976,7 @@ def main() -> None:
           ctx.font = '700 18px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(healthPct + '%', x, y);
+          ctx.fillText(num(centerCount), x, y);
           ctx.restore();
         }}
       }};
