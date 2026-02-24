@@ -859,7 +859,7 @@ def main() -> None:
             borderWidth: 3,
             pointRadius: 5,
             pointHoverRadius: 7,
-            pointHitRadius: 0,
+            pointHitRadius: 4,
             pointBackgroundColor: ui.arr,
             tension: 0.2,
             fill: false,
@@ -869,11 +869,11 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
-          interaction: {{ mode: 'point', intersect: true }},
+          interaction: {{ mode: 'nearest', axis: 'xy', intersect: true }},
           layout: {{ padding: {{ top: 14, right: 14, left: 16, bottom: 6 }} }},
           plugins: {{
             legend: {{ display: false }},
-            tooltip: {{ mode: 'point', intersect: true }}
+            tooltip: {{ mode: 'nearest', intersect: true }}
           }},
           scales: {{
             y: {{ beginAtZero: false, grid: {{ color: ui.grid }}, ticks: {{ color: ui.muted, padding: 6, callback: (v) => money(v) }} }},
