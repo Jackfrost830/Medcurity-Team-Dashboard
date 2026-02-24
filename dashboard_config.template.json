@@ -69,7 +69,7 @@
       "report_id": "00ORO000002i21m2AA",
       "aggregation": "count",
       "date_keys": [
-        "Account: Created Date"
+        "Created Date"
       ],
       "series_mode": "cumulative"
     },

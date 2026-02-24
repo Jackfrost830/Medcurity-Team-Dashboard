@@ -690,6 +690,8 @@ def main() -> None:
         ).quarter_goal || 0
       );
       const goalSeries = labels.map(() => goalValue);
+      const statuses = values.map((v, i) => pointStatus(v, goalSeries, i));
+      const colorByStatus = (s) => s === 'green' ? ui.green : (s === 'yellow' ? ui.yellow : (s === 'red' ? ui.red : ui.clear));
       new Chart(document.getElementById(canvasId), {{
         type: 'line',
         data: {{
@@ -698,12 +700,13 @@ def main() -> None:
             {{
               label,
               data: values,
-              borderColor: ui.arr,
               borderWidth: 3,
               pointRadius: 3,
               pointHoverRadius: 5,
               pointHitRadius: 12,
-              pointBackgroundColor: ui.arr,
+              pointBackgroundColor: statuses.map(s => colorByStatus(s)),
+              pointBorderColor: statuses.map(s => colorByStatus(s)),
+              segment: {{ borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) }},
               tension: 0.2,
               fill: false,
               datalabels: dataLabelOptions(ui, 'percent', 'actual', 'last_visible', currentIndex, 'left', false, 'center')
