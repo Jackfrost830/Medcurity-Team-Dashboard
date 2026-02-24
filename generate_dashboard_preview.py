@@ -773,8 +773,8 @@ def main() -> None:
               data: actual,
               borderWidth: 3,
               pointRadius: actual.map(v => v === null ? 0 : 4),
-              pointHoverRadius: actual.map(v => v === null ? 0 : 5),
-              pointHitRadius: 12,
+              pointHoverRadius: actual.map(v => v === null ? 0 : 6),
+              pointHitRadius: 6,
               pointBackgroundColor: statuses.map(s => colorByStatus(s)),
               pointBorderColor: statuses.map(s => colorByStatus(s)),
               segment: {{ borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) }},
@@ -799,8 +799,8 @@ def main() -> None:
               borderWidth: 2,
               borderDash: [6,4],
               pointRadius: goals.map((v, i) => (v === null || i !== currentIndex) ? 0 : 3),
-              pointHoverRadius: goals.map(v => v === null ? 0 : 5),
-              pointHitRadius: 12,
+              pointHoverRadius: goals.map(v => v === null ? 0 : 6),
+              pointHitRadius: 6,
               pointBackgroundColor: ui.goal,
               spanGaps: false,
               tension: 0.15,
@@ -821,6 +821,7 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
+          interaction: {{ mode: 'nearest', intersect: true }},
           layout: {{ padding: layoutPadding }},
           plugins: {{
             legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }}
@@ -902,8 +903,8 @@ def main() -> None:
               data: values,
               borderWidth: 3,
               pointRadius: 3,
-              pointHoverRadius: 5,
-              pointHitRadius: 12,
+              pointHoverRadius: 6,
+              pointHitRadius: 6,
               pointBackgroundColor: statuses.map(s => colorByStatus(s)),
               pointBorderColor: statuses.map(s => colorByStatus(s)),
               segment: {{ borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) }},
@@ -918,8 +919,8 @@ def main() -> None:
               borderWidth: 2,
               borderDash: [6,4],
               pointRadius: labels.map((_, i) => i === currentIndex ? 3 : 0),
-              pointHoverRadius: labels.map((_, i) => i === currentIndex ? 5 : 0),
-              pointHitRadius: 12,
+              pointHoverRadius: labels.map((_, i) => i === currentIndex ? 6 : 0),
+              pointHitRadius: 6,
               pointBackgroundColor: ui.goal,
               tension: 0,
               fill: false,
@@ -930,6 +931,7 @@ def main() -> None:
         options: {{
           responsive: true,
           maintainAspectRatio: false,
+          interaction: {{ mode: 'nearest', intersect: true }},
           layout: {{ padding: {{ top: 14, right: 14, left: 16, bottom: 6 }} }},
           plugins: {{
             legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }}
@@ -948,8 +950,27 @@ def main() -> None:
       const total = Number(services.active_projects || 0);
       const healthy = Math.max(total - flagged, 0);
       const atRisk = Math.max(flagged, 0);
+      const healthPct = total > 0 ? Math.round((healthy / total) * 100) : 100;
       const ui = chartUi();
+      const centerTextPlugin = {{
+        id: 'centerText',
+        afterDraw(chart) {{
+          const meta = chart.getDatasetMeta(0);
+          if (!meta || !meta.data || !meta.data.length) return;
+          const x = meta.data[0].x;
+          const y = meta.data[0].y;
+          const ctx = chart.ctx;
+          ctx.save();
+          ctx.fillStyle = ui.text;
+          ctx.font = '700 18px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(healthPct + '%', x, y);
+          ctx.restore();
+        }}
+      }};
       new Chart(document.getElementById('c-svc-health'), {{
+        plugins: [centerTextPlugin],
         type: 'doughnut',
         data: {{
           labels: ['Healthy', 'At Risk'],
