@@ -407,30 +407,13 @@ def extract_tabular_report_rows(report_data: dict[str, Any]) -> list[dict[str, A
     return output
 
 
-def compute_financial_window(
-    anchor_date: date,
-    window_mode: str = "rolling_365",
-) -> tuple[date, date]:
-    mode = (window_mode or "rolling_365").strip().lower()
-    if mode in {"quarter_last_year", "same_quarter_last_year", "quarter_rolling"}:
-        quarter_start_month = ((anchor_date.month - 1) // 3) * 3 + 1
-        start = date(anchor_date.year - 1, quarter_start_month, 1)
-        return start, anchor_date
-    return anchor_date - timedelta(days=365), anchor_date
-
-
-def compute_financial_metrics_from_report(
-    report_data: dict[str, Any],
-    owner_filter: str = "Consolidated",
-    anchor_date: date | None = None,
-    window_mode: str = "rolling_365",
-) -> dict[str, Any]:
+def compute_financial_metrics_from_report(report_data: dict[str, Any], owner_filter: str = "Consolidated") -> dict[str, Any]:
     rows = extract_tabular_report_rows(report_data)
     if not rows:
         raise ConfigError("Report has no detail rows. Ensure includeDetails=true and report is tabular.")
 
-    today = anchor_date or date.today()
-    window_start, window_end = compute_financial_window(anchor_date=today, window_mode=window_mode)
+    today = date.today()
+    cutoff = today - timedelta(days=365)
     owner_filter_norm = owner_filter.strip().lower()
     renewal_sources = {
         "renewal - influence partner",
@@ -481,7 +464,7 @@ def compute_financial_metrics_from_report(
             ],
         )
         close_date = parse_date(close_raw)
-        if close_date is None or close_date < window_start or close_date > window_end:
+        if close_date is None or close_date <= cutoff:
             continue
 
         if owner_filter_norm != "consolidated" and owner.strip().lower() != owner_filter_norm:
@@ -509,12 +492,8 @@ def compute_financial_metrics_from_report(
         "arr": arr_amount,
         "nrr_dollar_pct": nrr_dollar_pct,
         "nrr_customer_pct": nrr_customer_pct,
-        "window_mode": window_mode,
-        "window_start": window_start.isoformat(),
-        "window_end": window_end.isoformat(),
-        "won_count_window": won_count,
-        "lost_count_window": lost_count,
-        "lost_amount_window": lost_amount,
+        "window_start": cutoff.isoformat(),
+        "window_end": today.isoformat(),
         "won_count_rolling_365": won_count,
         "lost_count_rolling_365": lost_count,
         "lost_amount_rolling_365": lost_amount,
@@ -1074,7 +1053,6 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
         if crm_client is None:
             crm_client = crm_client_from_config(config)
         return crm_client
-    quarter_anchor = parse_date(config.get("quarter_anchor_date")) or date.today()
     financial_cfg = config.get("salesforce_financial_model", {})
     financial_report_id = str(financial_cfg.get("report_id", "")).strip()
     if financial_report_id:
@@ -1084,8 +1062,6 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
             financial_metrics = compute_financial_metrics_from_report(
                 financial_report,
                 owner_filter=str(financial_cfg.get("owner_filter", "Consolidated")),
-                anchor_date=quarter_anchor,
-                window_mode=str(financial_cfg.get("window_mode", "rolling_365")),
             )
             for metric_name in ("arr", "nrr_customer_pct", "nrr_dollar_pct"):
                 output["salesforce"][metric_name] = {
@@ -1096,12 +1072,8 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
             output["salesforce"]["financial_model_meta"] = {
                 "report_id": financial_report_id,
                 "owner_filter": str(financial_cfg.get("owner_filter", "Consolidated")),
-                "window_mode": financial_metrics.get("window_mode"),
                 "window_start": financial_metrics["window_start"],
                 "window_end": financial_metrics["window_end"],
-                "won_count_window": financial_metrics.get("won_count_window"),
-                "lost_count_window": financial_metrics.get("lost_count_window"),
-                "lost_amount_window": financial_metrics.get("lost_amount_window"),
                 "won_count_rolling_365": financial_metrics["won_count_rolling_365"],
                 "lost_count_rolling_365": financial_metrics["lost_count_rolling_365"],
                 "lost_amount_rolling_365": financial_metrics["lost_amount_rolling_365"],
@@ -1113,6 +1085,7 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
                 "message": str(exc),
             }
 
+    quarter_anchor = parse_date(config.get("quarter_anchor_date")) or date.today()
     if sf_quarter_metrics:
         try:
             client = get_crm_client()
