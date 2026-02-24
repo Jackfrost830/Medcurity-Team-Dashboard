@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard Goals Admin</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#f3f7fc; color:#0f2747; margin:0; }
+    .wrap { max-width:1050px; margin:20px auto; padding:0 14px; }
+    h1 { margin:0 0 8px; }
+    .card { background:#fff; border:1px solid #d8e4f3; border-radius:10px; padding:12px; margin-bottom:10px; }
+    .row { display:grid; grid-template-columns: 200px 170px 1fr 1fr 1fr; gap:8px; align-items:center; margin-bottom:8px; }
+    input { padding:8px; border:1px solid #c8d8ee; border-radius:8px; width:100%; }
+    .btns { display:flex; gap:8px; }
+    button, a { padding:8px 12px; border-radius:8px; border:1px solid #bfd3ec; background:#fff; cursor:pointer; text-decoration:none; color:#0f2747; }
+    .hint { color:#5f7190; font-size:12px; margin-bottom:10px; }
+    .head { font-size:11px; color:#5f7190; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; display:grid; grid-template-columns: 200px 170px 1fr 1fr 1fr; gap:8px; }
+    @media (max-width: 900px) { .row, .head { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Goals Admin</h1>
+    <div class="hint">Set quarter goal and cumulative month goals (M1, M2, M3). M3 is forced to the quarter goal. If M1/M2 are blank, they auto-fill evenly. Active Pipeline is fixed at 800,000 each month.</div>
+    <div class="card">
+      <div class="head"><div>Metric</div><div>Quarter Goal</div><div>Month1 Goal</div><div>Month2 Goal</div><div>Month3 Goal</div></div>
+      <div id="form"></div>
+    </div>
+    <div class="btns">
+      <button id="save">Save Goals</button>
+      <button id="reset">Reset Defaults</button>
+      <a href="dashboard_preview.html">Back To Dashboard</a>
+    </div>
+  </div>
+
+  <script>
+    const LABELS = {
+      new_sales:'New Sales',
+      total_active_pipeline:'Total Active Pipeline',
+      new_customers:'New Customers',
+      arr:'ARR',
+      sql:'SQL',
+      mql:'MQL',
+      renewals_number:'Renewals',
+      nrr_customer_pct:'NRR by Customer',
+      nrr_dollar_pct:'NRR by Dollar',
+      qtd_billing_progress:'QTD Billing Goal'
+    };
+    const DEFAULT_GOALS = {"new_sales": {"quarter_goal": 36000, "month_goals": [null, null, null]}, "total_active_pipeline": {"quarter_goal": 800000, "month_goals": [800000, 800000, 800000]}, "new_customers": {"quarter_goal": 24, "month_goals": [null, null, null]}, "arr": {"quarter_goal": 1100000, "month_goals": [null, null, null]}, "sql": {"quarter_goal": 15, "month_goals": [null, null, null]}, "mql": {"quarter_goal": 75, "month_goals": [null, null, null]}, "renewals_number": {"quarter_goal": 150000, "month_goals": [null, null, null]}, "nrr_customer_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "nrr_dollar_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "qtd_billing_progress": {"quarter_goal": 350000, "month_goals": [null, null, null]}};
+
+    function normalizeGoalEntry(raw, fallback, metricKey = '') {
+      if (metricKey === 'total_active_pipeline') {
+        return { quarter_goal: 800000, month_goals: [800000, 800000, 800000] };
+      }
+      if (Array.isArray(raw)) {
+        const monthly = raw.map(x => Number(x || 0));
+        return { quarter_goal: monthly.reduce((a,b)=>a+b,0), month_goals: monthly };
+      }
+      const src = raw && typeof raw === 'object' ? raw : fallback;
+      const month_goals = (src?.month_goals || src?.splits || fallback.month_goals || [null, null, null]).map(v => {
+        if (v === null || v === undefined || v === '') return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : null;
+      });
+      return {
+        quarter_goal: Number(src?.quarter_goal ?? fallback.quarter_goal ?? 0),
+        month_goals
+      };
+    }
+
+    function loadGoals() {
+      try {
+        const v2 = localStorage.getItem('dashboard_goals_v2');
+        if (v2) {
+          const parsed = JSON.parse(v2);
+          const out = {};
+          Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(parsed[k], DEFAULT_GOALS[k], k));
+          return out;
+        }
+        const v1 = localStorage.getItem('dashboard_goals_v1');
+        if (v1) {
+          const parsed = JSON.parse(v1);
+          const out = {};
+          Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(parsed[k], DEFAULT_GOALS[k], k));
+          return out;
+        }
+      } catch (e) {}
+      const out = {};
+      Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(DEFAULT_GOALS[k], DEFAULT_GOALS[k], k));
+      return out;
+    }
+
+    function render() {
+      const goals = loadGoals();
+      const form = document.getElementById('form');
+      form.innerHTML = Object.keys(LABELS).map(key => {
+        const g = goals[key] || DEFAULT_GOALS[key];
+        const locked = key === 'total_active_pipeline';
+        const m0 = g.month_goals?.[0];
+        const m1 = g.month_goals?.[1];
+        const m2 = g.month_goals?.[2];
+        const ro = locked ? 'readonly' : '';
+        return `<div class="row">`
+          + `<div><strong>${LABELS[key]}</strong></div>`
+          + `<input data-k="${key}" data-f="quarter_goal" value="${g.quarter_goal}" ${ro} />`
+          + `<input data-k="${key}" data-f="month_goal" data-i="0" value="${m0 === null || m0 === undefined ? '' : m0}" ${ro} />`
+          + `<input data-k="${key}" data-f="month_goal" data-i="1" value="${m1 === null || m1 === undefined ? '' : m1}" ${ro} />`
+          + `<input data-k="${key}" data-f="month_goal" data-i="2" value="${m2 === null || m2 === undefined ? '' : m2}" ${ro} />`
+          + `</div>`;
+      }).join('');
+    }
+
+    document.getElementById('save').onclick = () => {
+      const goals = loadGoals();
+      document.querySelectorAll('input[data-k]').forEach(inp => {
+        const k = inp.getAttribute('data-k');
+        if (!goals[k]) goals[k] = { quarter_goal: 0, month_goals: [null, null, null] };
+        if (k === 'total_active_pipeline') {
+          goals[k] = { quarter_goal: 800000, month_goals: [800000, 800000, 800000] };
+          return;
+        }
+        const f = inp.getAttribute('data-f');
+        if (f === 'quarter_goal') {
+          goals[k].quarter_goal = Number(inp.value || 0);
+        } else {
+          const i = Number(inp.getAttribute('data-i'));
+          const raw = inp.value;
+          goals[k].month_goals[i] = raw === '' ? null : Number(raw || 0);
+        }
+      });
+      localStorage.setItem('dashboard_goals_v2', JSON.stringify(goals));
+      alert('Goals saved. Refresh dashboard preview.');
+    };
+
+    document.getElementById('reset').onclick = () => {
+      localStorage.setItem('dashboard_goals_v2', JSON.stringify(DEFAULT_GOALS));
+      render();
+    };
+
+    render();
+  </script>
+</body>
+</html>
