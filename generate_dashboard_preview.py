@@ -750,11 +750,11 @@ def main() -> None:
       const ui = chartUi();
       const colorByStatus = (s) => s === 'green' ? ui.green : (s === 'yellow' ? ui.yellow : (s === 'red' ? ui.red : ui.clear));
       const isPipeline = metricKey === 'total_active_pipeline';
-      const actualPointRadius = 4;
+      const actualPointRadius = 5;
       const actualPointHoverRadius = 6;
-      const actualPointHitRadius = 4;
+      const actualPointHitRadius = 0;
       const goalPointHoverRadius = 6;
-      const goalPointHitRadius = 4;
+      const goalPointHitRadius = 0;
       let yMax = isPipeline ? 1000000 : undefined;
       if (metricKey === 'sql') {{
         const top = Math.max(
@@ -803,7 +803,7 @@ def main() -> None:
               borderColor: ui.goal,
               borderWidth: 2,
               borderDash: [6,4],
-              pointRadius: goals.map((v, i) => (v === null || i !== currentIndex) ? 0 : 3),
+              pointRadius: goals.map((v, i) => (v === null || i !== currentIndex) ? 0 : 4),
               pointHoverRadius: goals.map(v => v === null ? 0 : goalPointHoverRadius),
               pointHitRadius: goalPointHitRadius,
               pointBackgroundColor: ui.goal,
@@ -827,31 +827,6 @@ def main() -> None:
           responsive: true,
           maintainAspectRatio: false,
           interaction: {{ mode: 'point', intersect: true }},
-          onHover: (evt, _active, chart) => {{
-            if (metricKey !== 'new_sales') return;
-            const eventForHit = evt?.native || evt;
-            const hits = chart.getElementsAtEventForMode(
-              eventForHit,
-              'nearest',
-              {{ intersect: true }},
-              true
-            ) || [];
-            const pointHit = hits.find(h => h.datasetIndex === 0 && actual[h.index] !== null && actual[h.index] !== undefined);
-            if (pointHit) {{
-              const activeEl = [{{ datasetIndex: 0, index: pointHit.index }}];
-              chart.setActiveElements(activeEl);
-              if (chart.tooltip) {{
-                const el = pointHit.element || {{}};
-                chart.tooltip.setActiveElements(activeEl, {{ x: el.x || 0, y: el.y || 0 }});
-              }}
-              chart.canvas.style.cursor = 'pointer';
-            }} else {{
-              chart.setActiveElements([]);
-              if (chart.tooltip) chart.tooltip.setActiveElements([], {{ x: 0, y: 0 }});
-              chart.canvas.style.cursor = 'default';
-            }}
-            chart.update('none');
-          }},
           layout: {{ padding: layoutPadding }},
           plugins: {{
             legend: {{ display: true, labels: {{ boxWidth: 10, color: ui.text }} }},
@@ -889,7 +864,7 @@ def main() -> None:
             borderWidth: 3,
             pointRadius: 4,
             pointHoverRadius: 7,
-            pointHitRadius: 4,
+            pointHitRadius: 0,
             pointBackgroundColor: ui.arr,
             tension: 0.2,
             fill: false,
@@ -939,7 +914,7 @@ def main() -> None:
               borderWidth: 3,
               pointRadius: 3,
               pointHoverRadius: 6,
-              pointHitRadius: 4,
+              pointHitRadius: 0,
               pointBackgroundColor: statuses.map(s => colorByStatus(s)),
               pointBorderColor: statuses.map(s => colorByStatus(s)),
               segment: {{ borderColor: ctx => colorByStatus(statuses[ctx.p1DataIndex]) }},
@@ -953,9 +928,9 @@ def main() -> None:
               borderColor: ui.goal,
               borderWidth: 2,
               borderDash: [6,4],
-              pointRadius: labels.map((_, i) => i === currentIndex ? 3 : 0),
+              pointRadius: labels.map((_, i) => i === currentIndex ? 4 : 0),
               pointHoverRadius: labels.map((_, i) => i === currentIndex ? 6 : 0),
-              pointHitRadius: 4,
+              pointHitRadius: 0,
               pointBackgroundColor: ui.goal,
               tension: 0,
               fill: false,
