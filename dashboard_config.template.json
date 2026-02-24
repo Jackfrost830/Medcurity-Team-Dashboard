@@ -2,6 +2,10 @@
   "financial_workbook": "/Users/braydenfrost/Library/CloudStorage/OneDrive-SharedLibraries-Medcurity,Inc/Medcurity, Inc Team Site - Documents/Admin/Medcurity Stats/ARR/Medcurity Financial and SaaS Metrics - James.xlsx",
   "output_path": "dashboard_metrics_output.json",
   "preferred_source": "salesforce_then_excel",
+  "crm": {
+    "provider": "salesforce",
+    "pipedrive_reports_json_path": ""
+  },
   "quarter_anchor_date": "",
   "dashboard_metrics": [
     "arr",

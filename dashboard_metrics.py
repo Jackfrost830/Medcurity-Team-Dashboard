@@ -5,7 +5,7 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
 
@@ -19,6 +19,13 @@ NS = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main", "r": "ht
 
 class ConfigError(Exception):
     pass
+
+
+class CRMReportClient(Protocol):
+    provider: str
+
+    def fetch_report(self, report_id: str, include_details: bool = True) -> dict[str, Any]:
+        ...
 
 
 def load_dotenv(path: Path) -> None:
@@ -184,6 +191,49 @@ def fetch_salesforce_report(sf: Salesforce, report_id: str, include_details: boo
     if not isinstance(response, dict):
         raise ConfigError(f"Unexpected Salesforce report response for report {report_id}")
     return response
+
+
+class SalesforceReportClient:
+    provider = "salesforce"
+
+    def __init__(self) -> None:
+        self._sf = salesforce_client_from_env()
+
+    def fetch_report(self, report_id: str, include_details: bool = True) -> dict[str, Any]:
+        return fetch_salesforce_report(self._sf, report_id=report_id, include_details=include_details)
+
+
+class PipedriveReportClient:
+    provider = "pipedrive"
+
+    def __init__(self, config: dict[str, Any]) -> None:
+        # Pipedrive does not have a Salesforce-style Analytics Reports API.
+        # During migration, implement provider-specific metric extractors or
+        # provide report snapshots as JSON at this path.
+        self._path = Path(str(config.get("pipedrive_reports_json_path", "")).strip()).expanduser()
+        self._cache: dict[str, Any] = {}
+        if self._path and self._path.exists():
+            raw = json.loads(self._path.read_text())
+            if isinstance(raw, dict):
+                self._cache = raw
+
+    def fetch_report(self, report_id: str, include_details: bool = True) -> dict[str, Any]:
+        if report_id in self._cache and isinstance(self._cache[report_id], dict):
+            return self._cache[report_id]
+        raise ConfigError(
+            "Pipedrive provider selected but report mapping is not configured. "
+            "Set pipedrive_reports_json_path with objects keyed by report_id."
+        )
+
+
+def crm_client_from_config(config: dict[str, Any]) -> CRMReportClient:
+    crm_cfg = config.get("crm", {}) if isinstance(config.get("crm"), dict) else {}
+    provider = str(crm_cfg.get("provider", "salesforce")).strip().lower()
+    if provider == "salesforce":
+        return SalesforceReportClient()
+    if provider == "pipedrive":
+        return PipedriveReportClient(crm_cfg)
+    raise ConfigError(f"Unsupported CRM provider: {provider}")
 
 
 def extract_report_aggregate_value(report_data: dict[str, Any], aggregate_index: int = 0) -> float:
@@ -791,7 +841,7 @@ def row_value(row: dict[str, Any], aggregation: str) -> float:
 
 
 def compute_quarter_metric_from_reports(
-    sf: Salesforce,
+    crm_client: CRMReportClient,
     metric_name: str,
     metric_cfg: dict[str, Any],
     anchor_date: date,
@@ -817,7 +867,7 @@ def compute_quarter_metric_from_reports(
     account_counts: dict[tuple[str, str], int] = {}
 
     for report_id in report_ids:
-        report_data = fetch_salesforce_report(sf, report_id=report_id, include_details=include_details)
+        report_data = crm_client.fetch_report(report_id=report_id, include_details=include_details)
         if window_mode == "current_snapshot":
             snapshot_total += extract_report_aggregate_value(report_data, aggregate_index=0)
             continue
@@ -970,19 +1020,21 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
 
     sf_reports = config.get("salesforce_reports", {})
     sf_quarter_metrics = config.get("salesforce_quarter_metrics", {})
-    sf_client: Salesforce | None = None
+    crm_client: CRMReportClient | None = None
+    crm_provider = str((config.get("crm", {}) or {}).get("provider", "salesforce")).strip().lower()
+    output["meta"]["crm_provider"] = crm_provider
 
-    def get_sf_client() -> Salesforce:
-        nonlocal sf_client
-        if sf_client is None:
-            sf_client = salesforce_client_from_env()
-        return sf_client
+    def get_crm_client() -> CRMReportClient:
+        nonlocal crm_client
+        if crm_client is None:
+            crm_client = crm_client_from_config(config)
+        return crm_client
     financial_cfg = config.get("salesforce_financial_model", {})
     financial_report_id = str(financial_cfg.get("report_id", "")).strip()
     if financial_report_id:
         try:
-            sf = get_sf_client()
-            financial_report = fetch_salesforce_report(sf, report_id=financial_report_id, include_details=True)
+            client = get_crm_client()
+            financial_report = client.fetch_report(report_id=financial_report_id, include_details=True)
             financial_metrics = compute_financial_metrics_from_report(
                 financial_report,
                 owner_filter=str(financial_cfg.get("owner_filter", "Consolidated")),
@@ -1012,11 +1064,11 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
     quarter_anchor = parse_date(config.get("quarter_anchor_date")) or date.today()
     if sf_quarter_metrics:
         try:
-            sf = get_sf_client()
+            client = get_crm_client()
             for metric_name, metric_cfg in sf_quarter_metrics.items():
                 try:
                     metric_out = compute_quarter_metric_from_reports(
-                        sf=sf,
+                        crm_client=client,
                         metric_name=metric_name,
                         metric_cfg=metric_cfg or {},
                         anchor_date=quarter_anchor,
@@ -1064,13 +1116,12 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
             }
 
     if runnable_reports:
-        sf = get_sf_client()
+        client = get_crm_client()
         for metric_name, report_cfg in runnable_reports.items():
             report_id = report_cfg["report_id"].strip()
             value_path = report_cfg["value_path"].strip()
             try:
-                report_data = fetch_salesforce_report(
-                    sf,
+                report_data = client.fetch_report(
                     report_id=report_id,
                     include_details=bool(report_cfg.get("include_details", True)),
                 )

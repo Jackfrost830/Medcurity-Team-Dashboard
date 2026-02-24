@@ -20,6 +20,9 @@ Outputs:
 - `dashboard_goals.json` (default goals seed)
 
 ## Current behavior
+- CRM provider is config-driven (`crm.provider` in `dashboard_config.json`):
+  - `salesforce` (default, current production path)
+  - `pipedrive` scaffold via `crm.pipedrive_reports_json_path` (JSON report-map input)
 - Financial model from Salesforce report `00O5w000009E4ZyEAK`:
   - `arr`, `nrr_customer_pct`, `nrr_dollar_pct`
 - Quarter monthly metrics (Jan/Feb/Mar style):
