@@ -20,5 +20,27 @@
       "services_closed_projects_this_quarter": 1.0,
       "services_avg_project_close_days_this_quarter": 51.59615384615385
     }
+  },
+  {
+    "quarter": "Q1-2026",
+    "quarter_anchor_date": "2026-03-02",
+    "snapshot_date": "2026-03-02",
+    "week_start": "2026-03-02",
+    "generated_at_utc": "2026-03-02 21:35 UTC",
+    "metrics": {
+      "arr": 1056482.40088,
+      "nrr_customer_pct": 0.8805309734513275,
+      "nrr_dollar_pct": 0.9404543796019699,
+      "renewals_number": 157961.24998999998,
+      "new_sales": 17883.0,
+      "total_active_pipeline": 602690.9801506,
+      "new_customers": 8.0,
+      "lost_customers": 0.0,
+      "sql": 14.0,
+      "mql": 96.0,
+      "services_active_projects": 29.0,
+      "services_closed_projects_this_quarter": 1.0,
+      "services_avg_project_close_days_this_quarter": 51.59615384615385
+    }
   }
 ]
