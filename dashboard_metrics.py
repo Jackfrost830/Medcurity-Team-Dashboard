@@ -815,6 +815,39 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
     }
 
 
+def compute_services_hybrid(config: dict[str, Any], anchor_date: date) -> dict[str, Any]:
+    admin_data = compute_services_from_admin_dashboard(config=config, anchor_date=anchor_date)
+    clickup_data = compute_services_from_clickup(config=config, anchor_date=anchor_date)
+
+    if admin_data.get("status") != "ok" and clickup_data.get("status") != "ok":
+        return {
+            "status": "error",
+            "message": "Both admin dashboard and ClickUp services sources failed.",
+            "admin_dashboard": admin_data,
+            "clickup": clickup_data,
+        }
+    if admin_data.get("status") != "ok":
+        return clickup_data
+    if clickup_data.get("status") != "ok":
+        return admin_data
+
+    return {
+        "status": "ok",
+        "source": "hybrid",
+        "quarter": clickup_data.get("quarter") or admin_data.get("quarter"),
+        # Live operational counts from ClickUp.
+        "active_projects": clickup_data.get("active_projects", 0),
+        "overall_project_status": clickup_data.get("overall_project_status", "green"),
+        "projects_over_red_threshold": clickup_data.get("projects_over_red_threshold", []),
+        "status_breakdown": clickup_data.get("status_breakdown", []),
+        "task_count": clickup_data.get("task_count", 0),
+        # Historical / vetted quarter-close metrics from admin dashboard DB.
+        "closed_projects_this_quarter": admin_data.get("closed_projects_this_quarter", 0),
+        "avg_project_close_days_this_quarter": admin_data.get("avg_project_close_days_this_quarter", 0.0),
+        "red_item_threshold": clickup_data.get("red_item_threshold"),
+    }
+
+
 def row_date_from_candidates(row: dict[str, Any], date_keys: list[str]) -> date | None:
     default_candidates = [
         "closedate",
@@ -1116,6 +1149,8 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
             services_source = str(services_cfg.get("source", "clickup")).strip().lower()
             if services_source == "admin_dashboard_db":
                 output["services"] = compute_services_from_admin_dashboard(config=config, anchor_date=quarter_anchor)
+            elif services_source == "hybrid":
+                output["services"] = compute_services_hybrid(config=config, anchor_date=quarter_anchor)
             else:
                 output["services"] = compute_services_from_clickup(config=config, anchor_date=quarter_anchor)
         except (RequestException, ConfigError) as exc:
