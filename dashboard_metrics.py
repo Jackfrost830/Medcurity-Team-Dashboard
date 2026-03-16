@@ -716,6 +716,13 @@ def compute_services_from_admin_dashboard(config: dict[str, Any], anchor_date: d
     ]
     q_label = quarter_label(anchor_date)
     closed_this_quarter = sum(1 for p in completed if p.get("period_label") == q_label)
+    closed_names_this_quarter = sorted(
+        {
+            str(p.get("task_name", "")).strip()
+            for p in completed
+            if p.get("period_label") == q_label and str(p.get("task_name", "")).strip()
+        }
+    )
     avg_close_days = _admin_dashboard_avg_close_days(db_path, q_label)
     return {
         "status": "ok",
@@ -723,6 +730,7 @@ def compute_services_from_admin_dashboard(config: dict[str, Any], anchor_date: d
         "quarter": q_label,
         "active_projects": len(active),
         "closed_projects_this_quarter": closed_this_quarter,
+        "closed_projects_this_quarter_names": closed_names_this_quarter,
         "avg_project_close_days_this_quarter": avg_close_days,
         "overall_project_status": "green",
         "projects_over_red_threshold": [],
@@ -748,8 +756,18 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
     active_count = 0
     closed_this_quarter = 0
     close_day_values: list[float] = []
+    sra_final_closed_count = 0
+    sra_final_closed_names: set[str] = set()
     projects_over_threshold: list[dict[str, Any]] = []
     status_counts: Counter[str] = Counter()
+    sra_final_field_names = {
+        str(name).strip().lower()
+        for name in clickup_cfg.get(
+            "sra_final_field_names",
+            ["Present Final SRA Report (SRA)", "Present Final SRA Report"],
+        )
+        if str(name).strip()
+    }
 
     for task in tasks:
         status_name = str((task.get("status") or {}).get("status", "")).strip().lower()
@@ -764,6 +782,23 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
             closed_this_quarter += 1
             if created_dt is not None and closed_dt >= created_dt:
                 close_day_values.append((closed_dt - created_dt).total_seconds() / 86400.0)
+
+        # Use SRA final report date as close marker when teams close work without
+        # immediately reflecting task status transitions.
+        sra_final_in_quarter = False
+        for field in task.get("custom_fields", []) or []:
+            field_name = str(field.get("name", "")).strip().lower()
+            if field_name not in sra_final_field_names:
+                continue
+            final_dt = parse_epoch_ms_datetime(field.get("value"))
+            if final_dt is not None and q_start <= final_dt.date() < q_end:
+                sra_final_in_quarter = True
+                break
+        if sra_final_in_quarter:
+            sra_final_closed_count += 1
+            task_name = str(task.get("name", "")).strip()
+            if task_name:
+                sra_final_closed_names.add(task_name)
 
         if red_field:
             red_val = parse_number(task_custom_field_value(task, red_field))
@@ -806,6 +841,8 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
         "quarter": quarter_label(anchor_date),
         "active_projects": active_count,
         "closed_projects_this_quarter": closed_this_quarter,
+        "closed_projects_this_quarter_sra_final": sra_final_closed_count,
+        "closed_projects_this_quarter_sra_final_names": sorted(sra_final_closed_names),
         "avg_project_close_days_this_quarter": avg_close_days,
         "overall_project_status": overall_status,
         "projects_over_red_threshold": projects_over_threshold,
@@ -831,6 +868,23 @@ def compute_services_hybrid(config: dict[str, Any], anchor_date: date) -> dict[s
     if clickup_data.get("status") != "ok":
         return admin_data
 
+    closed_admin_names = {
+        str(name).strip().lower()
+        for name in (admin_data.get("closed_projects_this_quarter_names") or [])
+        if str(name).strip()
+    }
+    closed_clickup_sra_names = {
+        str(name).strip().lower()
+        for name in (clickup_data.get("closed_projects_this_quarter_sra_final_names") or [])
+        if str(name).strip()
+    }
+    if closed_admin_names or closed_clickup_sra_names:
+        closed_hybrid = len(closed_admin_names.union(closed_clickup_sra_names))
+    else:
+        closed_admin = int(admin_data.get("closed_projects_this_quarter", 0) or 0)
+        closed_clickup_sra = int(clickup_data.get("closed_projects_this_quarter_sra_final", 0) or 0)
+        closed_hybrid = max(closed_admin, closed_clickup_sra)
+
     return {
         "status": "ok",
         "source": "hybrid",
@@ -842,7 +896,7 @@ def compute_services_hybrid(config: dict[str, Any], anchor_date: date) -> dict[s
         "status_breakdown": clickup_data.get("status_breakdown", []),
         "task_count": clickup_data.get("task_count", 0),
         # Historical / vetted quarter-close metrics from admin dashboard DB.
-        "closed_projects_this_quarter": admin_data.get("closed_projects_this_quarter", 0),
+        "closed_projects_this_quarter": closed_hybrid,
         "avg_project_close_days_this_quarter": admin_data.get("avg_project_close_days_this_quarter", 0.0),
         "red_item_threshold": clickup_data.get("red_item_threshold"),
     }
