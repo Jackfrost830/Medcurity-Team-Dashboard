@@ -1,13 +1,9 @@
 {
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/", "destination": "/api/index" },
-    { "source": "/index.html", "destination": "/api/index" },
-    { "source": "/dashboard_team_view", "destination": "/api/dashboard_team_view" },
-    { "source": "/dashboard_team_view.html", "destination": "/api/dashboard_team_view" },
-    { "source": "/dashboard_preview", "destination": "/api/dashboard_preview" },
-    { "source": "/dashboard_preview.html", "destination": "/api/dashboard_preview" },
-    { "source": "/goals_admin", "destination": "/api/goals_admin" },
-    { "source": "/goals_admin.html", "destination": "/api/goals_admin" }
+    { "source": "/", "destination": "/dashboard_team_view.html" },
+    { "source": "/dashboard_team_view", "destination": "/dashboard_team_view.html" },
+    { "source": "/dashboard_preview", "destination": "/dashboard_preview.html" },
+    { "source": "/goals_admin", "destination": "/goals_admin.html" }
   ]
 }
