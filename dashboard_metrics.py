@@ -598,28 +598,30 @@ def _load_dashboard_history_values(history_path: Path, metric_name: str, q_label
     if not isinstance(raw, list):
         return {}
 
-    latest_by_month: dict[str, tuple[date, float]] = {}
+    latest_by_month: dict[str, tuple[date, date, float]] = {}
     for item in raw:
         if not isinstance(item, dict):
             continue
         if str(item.get("quarter", "")).strip() != q_label:
             continue
-        snapshot_iso = str(item.get("snapshot_date") or item.get("quarter_anchor_date") or "").strip()
-        snapshot_dt = parse_date(snapshot_iso)
-        if snapshot_dt is None:
+        anchor_iso = str(item.get("quarter_anchor_date") or "").strip()
+        anchor_dt = parse_date(anchor_iso)
+        if anchor_dt is None:
             continue
+        snapshot_iso = str(item.get("snapshot_date") or "").strip()
+        snapshot_dt = parse_date(snapshot_iso) or anchor_dt
         metrics = item.get("metrics", {})
         if not isinstance(metrics, dict):
             continue
         if metric_name not in metrics:
             continue
         val = parse_number(metrics.get(metric_name))
-        month_key = snapshot_dt.strftime("%Y-%m")
+        month_key = anchor_dt.strftime("%Y-%m")
         prev = latest_by_month.get(month_key)
-        if prev is None or snapshot_dt > prev[0]:
-            latest_by_month[month_key] = (snapshot_dt, val)
+        if prev is None or anchor_dt > prev[0] or (anchor_dt == prev[0] and snapshot_dt > prev[1]):
+            latest_by_month[month_key] = (anchor_dt, snapshot_dt, val)
 
-    return {k: v for k, (_, v) in latest_by_month.items()}
+    return {k: v for k, (_, __, v) in latest_by_month.items()}
 
 
 def clickup_headers() -> dict[str, str]:
