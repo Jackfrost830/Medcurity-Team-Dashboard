@@ -25,7 +25,14 @@ class ConfigError(Exception):
 class CRMReportClient(Protocol):
     provider: str
 
-    def fetch_report(self, report_id: str, include_details: bool = True) -> dict[str, Any]:
+    def fetch_report(
+        self,
+        report_id: str,
+        include_details: bool = True,
+        standard_date_column: str | None = None,
+        standard_start_date: str | None = None,
+        standard_end_date: str | None = None,
+    ) -> dict[str, Any]:
         ...
 
 
@@ -184,11 +191,39 @@ def salesforce_client_from_env() -> Salesforce:
     )
 
 
-def fetch_salesforce_report(sf: Salesforce, report_id: str, include_details: bool = True) -> dict[str, Any]:
-    response = sf.restful(
-        f"analytics/reports/{report_id}",
-        params={"includeDetails": str(include_details).lower()},
-    )
+def fetch_salesforce_report(
+    sf: Salesforce,
+    report_id: str,
+    include_details: bool = True,
+    standard_date_column: str | None = None,
+    standard_start_date: str | None = None,
+    standard_end_date: str | None = None,
+) -> dict[str, Any]:
+    # If provided, override report's standard date filter so historical-quarter
+    # pulls do not break when report defaults roll to the current quarter.
+    if standard_date_column and standard_start_date and standard_end_date:
+        url = f"https://{sf.sf_instance}/services/data/v59.0/analytics/reports/{report_id}"
+        params = {"includeDetails": str(include_details).lower()}
+        headers = {"Authorization": f"Bearer {sf.session_id}", "Content-Type": "application/json"}
+        body = {
+            "reportMetadata": {
+                "standardDateFilter": {
+                    "column": standard_date_column,
+                    "durationValue": "CUSTOM",
+                    "startDate": standard_start_date,
+                    "endDate": standard_end_date,
+                }
+            }
+        }
+        resp = sf.session.post(url, params=params, headers=headers, json=body, timeout=30)
+        if resp.status_code >= 400:
+            raise ConfigError(f"Salesforce report override failed ({resp.status_code}): {resp.text[:240]}")
+        response = resp.json()
+    else:
+        response = sf.restful(
+            f"analytics/reports/{report_id}",
+            params={"includeDetails": str(include_details).lower()},
+        )
     if not isinstance(response, dict):
         raise ConfigError(f"Unexpected Salesforce report response for report {report_id}")
     return response
@@ -200,8 +235,22 @@ class SalesforceReportClient:
     def __init__(self) -> None:
         self._sf = salesforce_client_from_env()
 
-    def fetch_report(self, report_id: str, include_details: bool = True) -> dict[str, Any]:
-        return fetch_salesforce_report(self._sf, report_id=report_id, include_details=include_details)
+    def fetch_report(
+        self,
+        report_id: str,
+        include_details: bool = True,
+        standard_date_column: str | None = None,
+        standard_start_date: str | None = None,
+        standard_end_date: str | None = None,
+    ) -> dict[str, Any]:
+        return fetch_salesforce_report(
+            self._sf,
+            report_id=report_id,
+            include_details=include_details,
+            standard_date_column=standard_date_column,
+            standard_start_date=standard_start_date,
+            standard_end_date=standard_end_date,
+        )
 
 
 class PipedriveReportClient:
@@ -218,7 +267,14 @@ class PipedriveReportClient:
             if isinstance(raw, dict):
                 self._cache = raw
 
-    def fetch_report(self, report_id: str, include_details: bool = True) -> dict[str, Any]:
+    def fetch_report(
+        self,
+        report_id: str,
+        include_details: bool = True,
+        standard_date_column: str | None = None,
+        standard_start_date: str | None = None,
+        standard_end_date: str | None = None,
+    ) -> dict[str, Any]:
         if report_id in self._cache and isinstance(self._cache[report_id], dict):
             return self._cache[report_id]
         raise ConfigError(
@@ -407,12 +463,14 @@ def extract_tabular_report_rows(report_data: dict[str, Any]) -> list[dict[str, A
     return output
 
 
-def compute_financial_metrics_from_report(report_data: dict[str, Any], owner_filter: str = "Consolidated") -> dict[str, Any]:
+def compute_financial_metrics_from_report(
+    report_data: dict[str, Any], owner_filter: str = "Consolidated", as_of_date: date | None = None
+) -> dict[str, Any]:
     rows = extract_tabular_report_rows(report_data)
     if not rows:
         raise ConfigError("Report has no detail rows. Ensure includeDetails=true and report is tabular.")
 
-    today = date.today()
+    today = as_of_date or date.today()
     cutoff = today - timedelta(days=365)
     owner_filter_norm = owner_filter.strip().lower()
     renewal_sources = {
@@ -528,6 +586,40 @@ def month_label(d: date) -> str:
 def quarter_label(anchor: date) -> str:
     q_num = ((anchor.month - 1) // 3) + 1
     return f"Q{q_num}-{anchor.year}"
+
+
+def _load_dashboard_history_values(history_path: Path, metric_name: str, q_label: str) -> dict[str, float]:
+    if not history_path.exists():
+        return {}
+    try:
+        raw = json.loads(history_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+    if not isinstance(raw, list):
+        return {}
+
+    latest_by_month: dict[str, tuple[date, float]] = {}
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("quarter", "")).strip() != q_label:
+            continue
+        snapshot_iso = str(item.get("snapshot_date") or item.get("quarter_anchor_date") or "").strip()
+        snapshot_dt = parse_date(snapshot_iso)
+        if snapshot_dt is None:
+            continue
+        metrics = item.get("metrics", {})
+        if not isinstance(metrics, dict):
+            continue
+        if metric_name not in metrics:
+            continue
+        val = parse_number(metrics.get(metric_name))
+        month_key = snapshot_dt.strftime("%Y-%m")
+        prev = latest_by_month.get(month_key)
+        if prev is None or snapshot_dt > prev[0]:
+            latest_by_month[month_key] = (snapshot_dt, val)
+
+    return {k: v for k, (_, v) in latest_by_month.items()}
 
 
 def clickup_headers() -> dict[str, str]:
@@ -951,6 +1043,17 @@ def row_value(row: dict[str, Any], aggregation: str) -> float:
     return 1.0
 
 
+def infer_standard_date_column(date_keys: list[str]) -> str | None:
+    if not date_keys:
+        return None
+    first = normalize_key(str(date_keys[0]))
+    if first == "closedate":
+        return "CLOSE_DATE"
+    if first == "createddate":
+        return "CREATED_DATE"
+    return None
+
+
 def compute_quarter_metric_from_reports(
     crm_client: CRMReportClient,
     metric_name: str,
@@ -978,11 +1081,53 @@ def compute_quarter_metric_from_reports(
     account_counts: dict[tuple[str, str], int] = {}
 
     for report_id in report_ids:
-        report_data = crm_client.fetch_report(report_id=report_id, include_details=include_details)
+        if window_mode == "month_end_snapshot":
+            standard_date_column = str(metric_cfg.get("standard_date_column", "")).strip() or infer_standard_date_column(date_keys)
+            if not standard_date_column:
+                standard_date_column = "CLOSE_DATE"
+            for idx, month_start in enumerate(month_starts):
+                month_end = (month_starts[idx + 1] - timedelta(days=1)) if idx < 2 else (q_end - timedelta(days=1))
+                report_data = crm_client.fetch_report(
+                    report_id=report_id,
+                    include_details=False,
+                    standard_date_column=standard_date_column,
+                    standard_start_date=q_start.isoformat(),
+                    standard_end_date=month_end.isoformat(),
+                )
+                month_values[idx] += extract_report_aggregate_value(report_data, aggregate_index=0)
+            continue
+
+        standard_date_column: str | None = None
+        standard_start_date: str | None = None
+        standard_end_date: str | None = None
+        use_override = bool(metric_cfg.get("use_standard_date_override", True))
+        if (
+            use_override
+            and window_mode == "quarter_monthly"
+            and getattr(crm_client, "provider", "") == "salesforce"
+        ):
+            standard_date_column = str(metric_cfg.get("standard_date_column", "")).strip() or infer_standard_date_column(date_keys)
+            if standard_date_column:
+                standard_start_date = q_start.isoformat()
+                standard_end_date = (q_end - timedelta(days=1)).isoformat()
+
+        report_data = crm_client.fetch_report(
+            report_id=report_id,
+            include_details=include_details,
+            standard_date_column=standard_date_column,
+            standard_start_date=standard_start_date,
+            standard_end_date=standard_end_date,
+        )
         if window_mode == "current_snapshot":
             snapshot_total += extract_report_aggregate_value(report_data, aggregate_index=0)
             continue
         rows = extract_tabular_report_rows(report_data)
+        if not rows and bool(metric_cfg.get("fallback_to_aggregate_when_no_rows", False)):
+            agg_val = extract_report_aggregate_value(report_data, aggregate_index=0)
+            if agg_val:
+                # Place aggregate fallback in the final month of the anchor quarter.
+                month_values[2] += agg_val
+            continue
         for row in rows:
             if not row_matches_filters(row, filters):
                 continue
@@ -1035,9 +1180,20 @@ def compute_quarter_metric_from_reports(
         for m in month_starts:
             if m.strftime("%Y-%m") <= anchor_date.strftime("%Y-%m"):
                 elapsed += 1
+        history_month_vals: dict[str, float] = {}
+        if bool(metric_cfg.get("use_history_month_end", False)):
+            history_path = Path(str(metric_cfg.get("history_path", "dashboard_history.json"))).expanduser()
+            history_month_vals = _load_dashboard_history_values(
+                history_path=history_path,
+                metric_name=metric_name,
+                q_label=quarter_label(anchor_date),
+            )
         series = []
         for i, m in enumerate(month_starts):
-            value = snapshot_total if i < elapsed else None
+            if i >= elapsed:
+                value = None
+            else:
+                value = history_month_vals.get(m.strftime("%Y-%m"), snapshot_total)
             series.append({"month": m.strftime("%Y-%m"), "label": month_label(m), "value": value})
         output.update(
             {
@@ -1056,6 +1212,24 @@ def compute_quarter_metric_from_reports(
                 "value": period_total,
                 "last_week_start": start.isoformat(),
                 "last_week_end_exclusive": end_exclusive.isoformat(),
+            }
+        )
+    elif window_mode == "month_end_snapshot":
+        series = [
+            {
+                "month": month_starts[i].strftime("%Y-%m"),
+                "label": month_label(month_starts[i]),
+                "value": month_values[i],
+            }
+            for i in range(3)
+        ]
+        output.update(
+            {
+                "series": series,
+                "qtd_total": month_values[-1] if month_values else 0.0,
+                "quarter_start": q_start.isoformat(),
+                "quarter_end_exclusive": q_end.isoformat(),
+                "series_mode": "month_end_snapshot",
             }
         )
     else:
@@ -1149,6 +1323,7 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
             financial_metrics = compute_financial_metrics_from_report(
                 financial_report,
                 owner_filter=str(financial_cfg.get("owner_filter", "Consolidated")),
+                as_of_date=parse_date(config.get("quarter_anchor_date")) or date.today(),
             )
             for metric_name in ("arr", "nrr_customer_pct", "nrr_dollar_pct"):
                 output["salesforce"][metric_name] = {

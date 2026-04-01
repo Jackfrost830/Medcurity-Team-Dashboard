@@ -215,7 +215,10 @@ def main() -> None:
     }}
     * {{ box-sizing: border-box; }}
     html {{ background:var(--bgTop); }}
-    body {{ margin:0; font-family: "Avenir Next", "Manrope", "SF Pro Text", "Segoe UI", sans-serif; color:var(--ink); background:radial-gradient(1200px 580px at 90% -14%, var(--glow) 0%, transparent 62%), linear-gradient(180deg,var(--bgTop) 0%, var(--bg) 34%); transition:background .2s ease,color .2s ease; }}
+    body {{ margin:0; font-family: "Avenir Next", "Manrope", "SF Pro Text", "Segoe UI", sans-serif; color:var(--ink); background:radial-gradient(1200px 580px at 90% -14%, var(--glow) 0%, transparent 62%), linear-gradient(180deg,var(--bgTop) 0%, var(--bg) 34%); transition:background .2s ease,color .2s ease; text-rendering:optimizeLegibility; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }}
+    html.exporting-hq, body.exporting-hq {{ background:#ffffff !important; background-image:none !important; }}
+    body.exporting-hq .sec {{ box-shadow:none !important; }}
+    html.exporting-hq .actions {{ visibility:hidden !important; }}
     .wrap {{ max-width:1760px; margin:16px auto; padding:0 20px 22px; }}
     .top {{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin-bottom:12px; column-gap:10px; }}
     h1 {{ margin:0; font-size:34px; letter-spacing:.01em; color:var(--ink); }}
@@ -234,8 +237,13 @@ def main() -> None:
     }}
     .stamp-main {{ color:var(--ink); font-weight:700; font-size:12px; letter-spacing:.01em; }}
     .stamp-sub {{ margin-top:2px; font-size:11px; opacity:.92; }}
+    @media print {{
+      html, body {{ background:#fff !important; }}
+      body {{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }}
+    }}
     .actions {{ display:flex; gap:8px; justify-self:end; }}
     .actions a, .actions button {{ color:var(--ink); text-decoration:none; font-weight:700; border:1px solid var(--line); padding:7px 10px; border-radius:8px; background:var(--card); cursor:pointer; }}
+    .actions button:disabled {{ opacity:.6; cursor:not-allowed; }}
     .sections {{ display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start; }}
     .sec {{ border:1px solid var(--line); border-radius:16px; background:var(--card); padding:12px; box-shadow:0 10px 24px rgba(19,40,68,.10); }}
     .sales {{ grid-column: 1; grid-row: 1; }}
@@ -325,7 +333,7 @@ def main() -> None:
         <div class=\"stamp-main\" id=\"stamp-main\"></div>
         <div class=\"stamp-sub\" id=\"stamp-sub\"></div>
       </div>
-      <div class=\"actions\"><button id=\"theme-toggle\" type=\"button\">Toggle Theme</button><a href=\"goals_admin.html\">Goals Admin</a></div>
+      <div class=\"actions\"><button id=\"theme-toggle\" type=\"button\">Toggle Theme</button><button id=\"export-hd\" type=\"button\">Download HD PNG</button><button id=\"export-pdf\" type=\"button\">Print HQ PDF</button><a href=\"goals_admin.html\">Goals Admin</a></div>
     </div>
 
     <div class=\"sections\">
@@ -457,6 +465,25 @@ def main() -> None:
     ];
 
     Chart.register(ChartDataLabels);
+    const BASE_DPR = Math.max(window.devicePixelRatio || 1, 3);
+    Chart.defaults.devicePixelRatio = BASE_DPR;
+    function allCharts() {{
+      const instances = Chart.instances;
+      if (!instances) return [];
+      if (typeof instances.values === 'function') return Array.from(instances.values());
+      return Object.values(instances);
+    }}
+    function setChartDprForPrint(enabled) {{
+      const target = enabled ? Math.max(window.devicePixelRatio || 1, 6) : BASE_DPR;
+      if (Chart.defaults.devicePixelRatio === target) return;
+      Chart.defaults.devicePixelRatio = target;
+      allCharts().forEach((chart) => {{
+        chart.resize();
+        chart.update('none');
+      }});
+    }}
+    window.addEventListener('beforeprint', () => setChartDprForPrint(true));
+    window.addEventListener('afterprint', () => setChartDprForPrint(false));
 
     function money(v) {{ return '$' + Number(v || 0).toLocaleString(undefined, {{maximumFractionDigits:0}}); }}
     function pct(v) {{ return (Number(v || 0) * 100).toFixed(1) + '%'; }}
@@ -711,7 +738,7 @@ def main() -> None:
 
     function transformedActualSeries(metricKey, rows, sfMetric, currentYm) {{
       if (!rows.length) return [];
-      if (metricKey === 'total_active_pipeline' || sfMetric?.series_mode === 'snapshot') {{
+      if (sfMetric?.series_mode === 'snapshot') {{
         const snap = Number(sfMetric?.snapshot_value ?? sfMetric?.qtd_total ?? sfMetric?.value ?? 0);
         return rows.map(r => (r.month <= currentYm ? snap : null));
       }}
@@ -1287,6 +1314,161 @@ def main() -> None:
         document.documentElement.setAttribute('data-theme', next);
         location.reload();
       }};
+    }}
+
+    function ensureHtml2Canvas() {{
+      if (window.html2canvas) return Promise.resolve(window.html2canvas);
+      return new Promise((resolve, reject) => {{
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+        s.onload = () => resolve(window.html2canvas);
+        s.onerror = () => reject(new Error('Failed to load html2canvas'));
+        document.head.appendChild(s);
+      }});
+    }}
+
+    const exportBtn = document.getElementById('export-hd');
+    function setForcedTeamViewVisibility(enabled) {{
+      const ownerEls = Array.from(document.querySelectorAll('.owner-only'));
+      const teamEls = Array.from(document.querySelectorAll('.team-only'));
+      if (enabled) {{
+        ownerEls.forEach((el) => {{
+          el.dataset.prevDisplay = el.style.display || '';
+          el.style.setProperty('display', 'none', 'important');
+        }});
+        teamEls.forEach((el) => {{
+          el.dataset.prevDisplay = el.style.display || '';
+          el.style.setProperty('display', 'block', 'important');
+        }});
+      }} else {{
+        ownerEls.forEach((el) => {{
+          const prev = el.dataset.prevDisplay;
+          if (prev === undefined) return;
+          if (prev) el.style.display = prev;
+          else el.style.removeProperty('display');
+          delete el.dataset.prevDisplay;
+        }});
+        teamEls.forEach((el) => {{
+          const prev = el.dataset.prevDisplay;
+          if (prev === undefined) return;
+          if (prev) el.style.display = prev;
+          else el.style.removeProperty('display');
+          delete el.dataset.prevDisplay;
+        }});
+      }}
+    }}
+
+    async function renderDashboardCanvas(scale = 3, asTeamView = true) {{
+      const hadViewOnlyClass = document.documentElement.classList.contains('view-only');
+      document.documentElement.classList.add('exporting-hq');
+      document.body.classList.add('exporting-hq');
+      if (asTeamView && !VIEW_ONLY) {{
+        document.documentElement.classList.add('view-only');
+        setForcedTeamViewVisibility(true);
+      }}
+      setChartDprForPrint(true);
+      await new Promise(r => setTimeout(r, 140));
+      const h2c = await ensureHtml2Canvas();
+      try {{
+        return await h2c(document.body, {{
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          scale,
+          windowWidth: document.documentElement.scrollWidth,
+          windowHeight: document.documentElement.scrollHeight,
+          scrollX: 0,
+          scrollY: -window.scrollY
+        }});
+      }} finally {{
+        if (asTeamView && !VIEW_ONLY && !hadViewOnlyClass) {{
+          setForcedTeamViewVisibility(false);
+          document.documentElement.classList.remove('view-only');
+        }}
+        document.body.classList.remove('exporting-hq');
+        document.documentElement.classList.remove('exporting-hq');
+      }}
+    }}
+
+    if (exportBtn) {{
+      exportBtn.onclick = async () => {{
+        const original = exportBtn.textContent;
+        exportBtn.disabled = true;
+        exportBtn.textContent = 'Rendering...';
+        try {{
+          const canvas = await renderDashboardCanvas(3, true);
+          const a = document.createElement('a');
+          const d = new Date();
+          const stamp = d.toISOString().slice(0, 10);
+          a.download = `medcurity-dashboard-${{stamp}}.png`;
+          a.href = canvas.toDataURL('image/png', 1.0);
+          a.click();
+        }} catch (err) {{
+          console.error(err);
+          alert('Could not generate HD image. Try again in a few seconds.');
+        }} finally {{
+          setChartDprForPrint(false);
+          exportBtn.disabled = false;
+          exportBtn.textContent = original;
+        }}
+      }};
+    }}
+
+    function ensureJsPdf() {{
+      if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+      return new Promise((resolve, reject) => {{
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+        s.onload = () => resolve(window.jspdf.jsPDF);
+        s.onerror = () => reject(new Error('Failed to load jsPDF'));
+        document.head.appendChild(s);
+      }});
+    }}
+
+    const pdfBtn = document.getElementById('export-pdf');
+    if (pdfBtn) {{
+      pdfBtn.onclick = () => {{
+        const original = pdfBtn.textContent;
+        pdfBtn.disabled = true;
+        pdfBtn.textContent = 'Rendering...';
+        (async () => {{
+          try {{
+            const canvas = await renderDashboardCanvas(2.5, true);
+            const jsPDF = await ensureJsPdf();
+            const d = new Date();
+            const stamp = d.toISOString().slice(0, 10);
+            const pageWidthPt = canvas.width * 72 / 220;
+            const pageHeightPt = canvas.height * 72 / 220;
+            const orientation = pageWidthPt >= pageHeightPt ? 'landscape' : 'portrait';
+            const pdf = new jsPDF({{
+              orientation,
+              unit: 'pt',
+              format: [pageWidthPt, pageHeightPt],
+              compress: true
+            }});
+            const img = canvas.toDataURL('image/jpeg', 0.92);
+            pdf.addImage(img, 'JPEG', 0, 0, pageWidthPt, pageHeightPt, undefined, 'FAST');
+            pdf.save(`medcurity-dashboard-one-page-${{stamp}}.pdf`);
+          }} catch (err) {{
+            console.error(err);
+            alert('Could not generate one-page PDF. Try again in a few seconds.');
+          }} finally {{
+            setChartDprForPrint(false);
+            pdfBtn.disabled = false;
+            pdfBtn.textContent = original;
+          }}
+        }})();
+      }};
+    }}
+
+    // Warm export dependencies in the background so first click is faster.
+    const warmExportDeps = () => {{
+      ensureHtml2Canvas().catch(() => null);
+      ensureJsPdf().catch(() => null);
+    }};
+    if ('requestIdleCallback' in window) {{
+      window.requestIdleCallback(warmExportDeps, {{ timeout: 2500 }});
+    }} else {{
+      setTimeout(warmExportDeps, 900);
     }}
   </script>
 </body>

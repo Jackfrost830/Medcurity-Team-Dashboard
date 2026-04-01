@@ -23,7 +23,10 @@
     }
     * { box-sizing: border-box; }
     html { background:var(--bgTop); }
-    body { margin:0; font-family: "Avenir Next", "Manrope", "SF Pro Text", "Segoe UI", sans-serif; color:var(--ink); background:radial-gradient(1200px 580px at 90% -14%, var(--glow) 0%, transparent 62%), linear-gradient(180deg,var(--bgTop) 0%, var(--bg) 34%); transition:background .2s ease,color .2s ease; }
+    body { margin:0; font-family: "Avenir Next", "Manrope", "SF Pro Text", "Segoe UI", sans-serif; color:var(--ink); background:radial-gradient(1200px 580px at 90% -14%, var(--glow) 0%, transparent 62%), linear-gradient(180deg,var(--bgTop) 0%, var(--bg) 34%); transition:background .2s ease,color .2s ease; text-rendering:optimizeLegibility; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+    html.exporting-hq, body.exporting-hq { background:#ffffff !important; background-image:none !important; }
+    body.exporting-hq .sec { box-shadow:none !important; }
+    html.exporting-hq .actions { visibility:hidden !important; }
     .wrap { max-width:1760px; margin:16px auto; padding:0 20px 22px; }
     .top { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin-bottom:12px; column-gap:10px; }
     h1 { margin:0; font-size:34px; letter-spacing:.01em; color:var(--ink); }
@@ -42,8 +45,13 @@
     }
     .stamp-main { color:var(--ink); font-weight:700; font-size:12px; letter-spacing:.01em; }
     .stamp-sub { margin-top:2px; font-size:11px; opacity:.92; }
+    @media print {
+      html, body { background:#fff !important; }
+      body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    }
     .actions { display:flex; gap:8px; justify-self:end; }
     .actions a, .actions button { color:var(--ink); text-decoration:none; font-weight:700; border:1px solid var(--line); padding:7px 10px; border-radius:8px; background:var(--card); cursor:pointer; }
+    .actions button:disabled { opacity:.6; cursor:not-allowed; }
     .sections { display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start; }
     .sec { border:1px solid var(--line); border-radius:16px; background:var(--card); padding:12px; box-shadow:0 10px 24px rgba(19,40,68,.10); }
     .sales { grid-column: 1; grid-row: 1; }
@@ -133,7 +141,7 @@
         <div class="stamp-main" id="stamp-main"></div>
         <div class="stamp-sub" id="stamp-sub"></div>
       </div>
-      <div class="actions"><button id="theme-toggle" type="button">Toggle Theme</button><a href="goals_admin.html">Goals Admin</a></div>
+      <div class="actions"><button id="theme-toggle" type="button">Toggle Theme</button><button id="export-hd" type="button">Download HD PNG</button><button id="export-pdf" type="button">Print HQ PDF</button><a href="goals_admin.html">Goals Admin</a></div>
     </div>
 
     <div class="sections">
@@ -242,13 +250,13 @@
   </div>
 
   <script>
-    const DATA = {"excel": {"arr": {"value": 1024258.4008800001, "source": {"sheet": "Summary", "cell": "AE23", "row": 23}}, "nrr_customer_pct": {"value": 0.9377609204813653, "source": {"sheet": "Summary", "cell": "AM27"}}, "nrr_dollar_pct": {"value": 0.8935361216730038, "source": {"sheet": "Summary", "cell": "AM29"}}}, "salesforce": {"arr": {"value": 1018541.35089, "report_id": "00O5w000009E4ZyEAK", "model": "financial_sheet_equivalent"}, "nrr_customer_pct": {"value": 0.8778280542986425, "report_id": "00O5w000009E4ZyEAK", "model": "financial_sheet_equivalent"}, "nrr_dollar_pct": {"value": 0.940062423575974, "report_id": "00O5w000009E4ZyEAK", "model": "financial_sheet_equivalent"}, "financial_model_meta": {"report_id": "00O5w000009E4ZyEAK", "owner_filter": "Consolidated", "window_start": "2025-03-16", "window_end": "2026-03-16", "won_count_rolling_365": 221, "lost_count_rolling_365": 27, "lost_amount_rolling_365": 61048.90006}, "renewals_number": {"report_ids": ["00ORO00000CN3nu2AD"], "aggregation": "amount", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 44849.0}, {"month": "2026-02", "label": "Feb", "value": 153061.24998999998}, {"month": "2026-03", "label": "Mar", "value": 158621.24998999998}], "qtd_total": 158621.24998999998, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "new_sales": {"report_ids": ["00ORO00000CMuW82AL"], "aggregation": "amount", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 15087.0}, {"month": "2026-02", "label": "Feb", "value": 22783.0}, {"month": "2026-03", "label": "Mar", "value": 30583.0}], "qtd_total": 30583.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "total_active_pipeline": {"report_ids": ["00O5w000008XOz1EAG"], "aggregation": "amount", "window_mode": "current_snapshot", "series": [{"month": "2026-01", "label": "Jan", "value": 724935.98}, {"month": "2026-02", "label": "Feb", "value": 724935.98}, {"month": "2026-03", "label": "Mar", "value": 724935.98}], "snapshot_value": 724935.98, "qtd_total": 724935.98, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "snapshot"}, "new_customers": {"report_ids": ["00ORO00000FHOX92AP"], "aggregation": "count", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 6.0}, {"month": "2026-02", "label": "Feb", "value": 9.0}, {"month": "2026-03", "label": "Mar", "value": 12.0}], "qtd_total": 12.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "lost_customers": {"report_ids": ["00O5w000009FLTdEAO"], "aggregation": "count", "window_mode": "last_week", "value": 0.0, "last_week_start": "2026-03-09", "last_week_end_exclusive": "2026-03-17"}, "sql": {"report_ids": ["00ORO000002i21m2AA"], "aggregation": "count", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 9.0}, {"month": "2026-02", "label": "Feb", "value": 14.0}, {"month": "2026-03", "label": "Mar", "value": 16.0}], "qtd_total": 16.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "mql": {"report_ids": ["00O5w000009F5BNEA0", "00O5w000009E9WWEA0"], "aggregation": "count", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 87.0}, {"month": "2026-02", "label": "Feb", "value": 96.0}, {"month": "2026-03", "label": "Mar", "value": 100.0}], "qtd_total": 100.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}}, "services": {"status": "ok", "source": "hybrid", "quarter": "Q1-2026", "active_projects": 29, "overall_project_status": "green", "projects_over_red_threshold": [], "status_breakdown": [{"status": "Completed", "count": 96}, {"status": "Kickoff Complete", "count": 10}, {"status": "In Progress", "count": 7}, {"status": "Onsite/Interviews Schedule", "count": 4}, {"status": "Onsite/Interviews Complete", "count": 3}, {"status": "Kickoff Scheduled", "count": 2}, {"status": "Ready For Final Review", "count": 2}, {"status": "W/U Scheduled", "count": 1}], "task_count": 125, "closed_projects_this_quarter": 4, "avg_project_close_days_this_quarter": 51.59615384615385, "red_item_threshold": 3}, "dashboard": {"arr": {"value": 1018541.35089, "source": "salesforce"}, "nrr_customer_pct": {"value": 0.8778280542986425, "source": "salesforce"}, "nrr_dollar_pct": {"value": 0.940062423575974, "source": "salesforce"}, "renewals_number": {"value": 158621.24998999998, "source": "salesforce"}, "new_sales": {"value": 30583.0, "source": "salesforce"}, "total_active_pipeline": {"value": 724935.98, "source": "salesforce"}, "new_customers": {"value": 12.0, "source": "salesforce"}, "lost_customers": {"value": 0.0, "source": "salesforce"}, "sql": {"value": 16.0, "source": "salesforce"}, "mql": {"value": 100.0, "source": "salesforce"}, "services_active_projects": {"value": 29, "source": "services"}, "services_closed_projects_this_quarter": {"value": 4, "source": "services"}, "services_avg_project_close_days_this_quarter": {"value": 51.59615384615385, "source": "services"}, "services_overall_project_status": {"value": "green", "source": "services"}}, "meta": {"workbook": "/Users/braydenfrost/Library/CloudStorage/OneDrive-SharedLibraries-Medcurity,Inc/Medcurity, Inc Team Site - Documents/Admin/Medcurity Stats/ARR/Medcurity Financial and SaaS Metrics - James.xlsx", "summary_sheet": "Summary", "preferred_source": "salesforce_then_excel", "quarter_anchor_date": "2026-03-16"}};
-    const CHART_DATA = {"new_sales": [{"month": "2026-01", "label": "Jan", "value": 15087.0}, {"month": "2026-02", "label": "Feb", "value": 22783.0}, {"month": "2026-03", "label": "Mar", "value": 30583.0}], "total_active_pipeline": [{"month": "2026-01", "label": "Jan", "value": 724935.98}, {"month": "2026-02", "label": "Feb", "value": 724935.98}, {"month": "2026-03", "label": "Mar", "value": 724935.98}], "new_customers": [{"month": "2026-01", "label": "Jan", "value": 6.0}, {"month": "2026-02", "label": "Feb", "value": 9.0}, {"month": "2026-03", "label": "Mar", "value": 12.0}], "sql": [{"month": "2026-01", "label": "Jan", "value": 9.0}, {"month": "2026-02", "label": "Feb", "value": 14.0}, {"month": "2026-03", "label": "Mar", "value": 16.0}], "mql": [{"month": "2026-01", "label": "Jan", "value": 87.0}, {"month": "2026-02", "label": "Feb", "value": 96.0}, {"month": "2026-03", "label": "Mar", "value": 100.0}], "renewals_number": [{"month": "2026-01", "label": "Jan", "value": 44849.0}, {"month": "2026-02", "label": "Feb", "value": 153061.24998999998}, {"month": "2026-03", "label": "Mar", "value": 158621.24998999998}]};
+    const DATA = {"excel": {"arr": {"value": 998300.45089, "source": {"sheet": "Summary", "cell": "AE23", "row": 23}}, "nrr_customer_pct": {"value": 0.9420826665875452, "source": {"sheet": "Summary", "cell": "AM27"}}, "nrr_dollar_pct": {"value": 0.9029850746268657, "source": {"sheet": "Summary", "cell": "AM29"}}}, "salesforce": {"arr": {"value": 1001207.95089, "report_id": "00O5w000009E4ZyEAK", "model": "financial_sheet_equivalent"}, "nrr_customer_pct": {"value": 0.8879310344827587, "report_id": "00O5w000009E4ZyEAK", "model": "financial_sheet_equivalent"}, "nrr_dollar_pct": {"value": 0.9422508580673943, "report_id": "00O5w000009E4ZyEAK", "model": "financial_sheet_equivalent"}, "financial_model_meta": {"report_id": "00O5w000009E4ZyEAK", "owner_filter": "Consolidated", "window_start": "2025-03-31", "window_end": "2026-03-31", "won_count_rolling_365": 232, "lost_count_rolling_365": 26, "lost_amount_rolling_365": 57818.90006}, "renewals_number": {"report_ids": ["00ORO00000CN3nu2AD"], "aggregation": "amount", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 44849.0}, {"month": "2026-02", "label": "Feb", "value": 153061.24998999998}, {"month": "2026-03", "label": "Mar", "value": 176166.04998999997}], "qtd_total": 176166.04999, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "new_sales": {"report_ids": ["00ORO00000CMuW82AL"], "aggregation": "amount", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 15087.0}, {"month": "2026-02", "label": "Feb", "value": 22783.0}, {"month": "2026-03", "label": "Mar", "value": 43677.8}], "qtd_total": 43677.8, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "total_active_pipeline": {"report_ids": ["00O5w000008XOz1EAG"], "aggregation": "amount", "window_mode": "current_snapshot", "series": [{"month": "2026-01", "label": "Jan", "value": 787505.58}, {"month": "2026-02", "label": "Feb", "value": 626666.9801506}, {"month": "2026-03", "label": "Mar", "value": 766838.58}], "snapshot_value": 787505.58, "qtd_total": 787505.58, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "snapshot"}, "new_customers": {"report_ids": ["00ORO00000FHOX92AP"], "aggregation": "count", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 6.0}, {"month": "2026-02", "label": "Feb", "value": 9.0}, {"month": "2026-03", "label": "Mar", "value": 21.0}], "qtd_total": 21.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "lost_customers": {"report_ids": ["00O5w000009FLTdEAO"], "aggregation": "count", "window_mode": "last_week", "value": 0.0, "last_week_start": "2026-03-30", "last_week_end_exclusive": "2026-04-01"}, "sql": {"report_ids": ["00ORO000002i21m2AA"], "aggregation": "count", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 9.0}, {"month": "2026-02", "label": "Feb", "value": 14.0}, {"month": "2026-03", "label": "Mar", "value": 31.0}], "qtd_total": 31.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}, "mql": {"report_ids": ["00O5w000009F5BNEA0", "00O5w000009E9WWEA0"], "aggregation": "count", "window_mode": "quarter_monthly", "series": [{"month": "2026-01", "label": "Jan", "value": 83.0}, {"month": "2026-02", "label": "Feb", "value": 90.0}, {"month": "2026-03", "label": "Mar", "value": 101.0}], "qtd_total": 101.0, "quarter_start": "2026-01-01", "quarter_end_exclusive": "2026-04-01", "series_mode": "cumulative"}}, "services": {"status": "ok", "source": "hybrid", "quarter": "Q1-2026", "active_projects": 27, "overall_project_status": "green", "projects_over_red_threshold": [], "status_breakdown": [{"status": "Completed", "count": 102}, {"status": "Kickoff Complete", "count": 9}, {"status": "In Progress", "count": 6}, {"status": "Kickoff Scheduled", "count": 3}, {"status": "Onsite/Interviews Schedule", "count": 3}, {"status": "Ready For Final Review", "count": 3}, {"status": "Onsite/Interviews Complete", "count": 2}, {"status": "W/U Scheduled", "count": 1}], "task_count": 129, "closed_projects_this_quarter": 8, "avg_project_close_days_this_quarter": 51.59615384615385, "red_item_threshold": 3}, "dashboard": {"arr": {"value": 1001207.95089, "source": "salesforce"}, "nrr_customer_pct": {"value": 0.8879310344827587, "source": "salesforce"}, "nrr_dollar_pct": {"value": 0.9422508580673943, "source": "salesforce"}, "renewals_number": {"value": 176166.04999, "source": "salesforce"}, "new_sales": {"value": 43677.8, "source": "salesforce"}, "total_active_pipeline": {"value": 787505.58, "source": "salesforce"}, "new_customers": {"value": 21.0, "source": "salesforce"}, "lost_customers": {"value": 0.0, "source": "salesforce"}, "sql": {"value": 31.0, "source": "salesforce"}, "mql": {"value": 101.0, "source": "salesforce"}, "services_active_projects": {"value": 27, "source": "services"}, "services_closed_projects_this_quarter": {"value": 8, "source": "services"}, "services_avg_project_close_days_this_quarter": {"value": 51.59615384615385, "source": "services"}, "services_overall_project_status": {"value": "green", "source": "services"}}, "meta": {"workbook": "/Users/braydenfrost/Library/CloudStorage/OneDrive-SharedLibraries-Medcurity,Inc/Medcurity, Inc Team Site - Documents/Admin/Medcurity Stats/ARR/Medcurity Financial and SaaS Metrics - James.xlsx", "summary_sheet": "Summary", "preferred_source": "salesforce_then_excel", "quarter_anchor_date": "2026-03-31"}};
+    const CHART_DATA = {"new_sales": [{"month": "2026-01", "label": "Jan", "value": 15087.0}, {"month": "2026-02", "label": "Feb", "value": 22783.0}, {"month": "2026-03", "label": "Mar", "value": 43677.8}], "total_active_pipeline": [{"month": "2026-01", "label": "Jan", "value": 787505.58}, {"month": "2026-02", "label": "Feb", "value": 626666.9801506}, {"month": "2026-03", "label": "Mar", "value": 766838.58}], "new_customers": [{"month": "2026-01", "label": "Jan", "value": 6.0}, {"month": "2026-02", "label": "Feb", "value": 9.0}, {"month": "2026-03", "label": "Mar", "value": 21.0}], "sql": [{"month": "2026-01", "label": "Jan", "value": 9.0}, {"month": "2026-02", "label": "Feb", "value": 14.0}, {"month": "2026-03", "label": "Mar", "value": 31.0}], "mql": [{"month": "2026-01", "label": "Jan", "value": 83.0}, {"month": "2026-02", "label": "Feb", "value": 90.0}, {"month": "2026-03", "label": "Mar", "value": 101.0}], "renewals_number": [{"month": "2026-01", "label": "Jan", "value": 44849.0}, {"month": "2026-02", "label": "Feb", "value": 153061.24998999998}, {"month": "2026-03", "label": "Mar", "value": 176166.04998999997}]};
     const DEFAULT_GOALS = {"new_sales": {"quarter_goal": 36000, "month_goals": [null, null, null]}, "total_active_pipeline": {"quarter_goal": 800000, "month_goals": [800000, 800000, 800000]}, "new_customers": {"quarter_goal": 24, "month_goals": [null, null, null]}, "arr": {"quarter_goal": 1100000, "month_goals": [null, null, null]}, "sql": {"quarter_goal": 15, "month_goals": [null, null, null]}, "mql": {"quarter_goal": 75, "month_goals": [null, null, null]}, "renewals_number": {"quarter_goal": 150000, "month_goals": [null, null, null]}, "nrr_customer_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "nrr_dollar_pct": {"quarter_goal": 0.9, "month_goals": [null, null, null]}, "qtd_billing_progress": {"quarter_goal": 350000, "month_goals": [null, null, null]}};
-    const ARR_HISTORY = [{"quarter": "Q2-2024", "value": 920441.25}, {"quarter": "Q3-2024", "value": 941425.5}, {"quarter": "Q4-2024", "value": 957989.0}, {"quarter": "Q1-2025", "value": 973958.55005}, {"quarter": "Q2-2025", "value": 991001.15005}, {"quarter": "Q3-2025", "value": 1003099.65005}, {"quarter": "Q4-2025", "value": 1005173.65088}, {"quarter": "Q1-2026", "value": 1018541.35089}];
-    const NRR_DOLLAR_HISTORY = [{"quarter": "Q1-2025", "value": 0.8792408210768073}, {"quarter": "Q2-2025", "value": 0.8413659273760765}, {"quarter": "Q3-2025", "value": 0.9333100067635891}, {"quarter": "Q4-2025", "value": 0.8400561472863652}, {"quarter": "Q1-2026", "value": 0.940062423575974}];
-    const NRR_CUSTOMER_HISTORY = [{"quarter": "Q1-2025", "value": 0.8620689655172413}, {"quarter": "Q2-2025", "value": 0.7441860465116279}, {"quarter": "Q3-2025", "value": 0.9130434782608696}, {"quarter": "Q4-2025", "value": 0.8771929824561404}, {"quarter": "Q1-2026", "value": 0.8778280542986425}];
-    const GENERATED_AT = "2026-03-16 20:32 UTC";
+    const ARR_HISTORY = [{"quarter": "Q2-2024", "value": 920441.25}, {"quarter": "Q3-2024", "value": 941425.5}, {"quarter": "Q4-2024", "value": 957989.0}, {"quarter": "Q1-2025", "value": 973958.55005}, {"quarter": "Q2-2025", "value": 991001.15005}, {"quarter": "Q3-2025", "value": 1003099.65005}, {"quarter": "Q4-2025", "value": 1005173.65088}, {"quarter": "Q1-2026", "value": 1001207.95089}];
+    const NRR_DOLLAR_HISTORY = [{"quarter": "Q1-2025", "value": 0.8792408210768073}, {"quarter": "Q2-2025", "value": 0.8413659273760765}, {"quarter": "Q3-2025", "value": 0.9333100067635891}, {"quarter": "Q4-2025", "value": 0.8400561472863652}, {"quarter": "Q1-2026", "value": 0.9422508580673943}];
+    const NRR_CUSTOMER_HISTORY = [{"quarter": "Q1-2025", "value": 0.8620689655172413}, {"quarter": "Q2-2025", "value": 0.7441860465116279}, {"quarter": "Q3-2025", "value": 0.9130434782608696}, {"quarter": "Q4-2025", "value": 0.8771929824561404}, {"quarter": "Q1-2026", "value": 0.8879310344827587}];
+    const GENERATED_AT = "2026-04-01 16:25 UTC";
     const CURRENT_QUARTER = "Q1-2026";
     const VIEW_ONLY = false;
     if (VIEW_ONLY) document.documentElement.classList.add('view-only');
@@ -265,6 +273,25 @@
     ];
 
     Chart.register(ChartDataLabels);
+    const BASE_DPR = Math.max(window.devicePixelRatio || 1, 3);
+    Chart.defaults.devicePixelRatio = BASE_DPR;
+    function allCharts() {
+      const instances = Chart.instances;
+      if (!instances) return [];
+      if (typeof instances.values === 'function') return Array.from(instances.values());
+      return Object.values(instances);
+    }
+    function setChartDprForPrint(enabled) {
+      const target = enabled ? Math.max(window.devicePixelRatio || 1, 6) : BASE_DPR;
+      if (Chart.defaults.devicePixelRatio === target) return;
+      Chart.defaults.devicePixelRatio = target;
+      allCharts().forEach((chart) => {
+        chart.resize();
+        chart.update('none');
+      });
+    }
+    window.addEventListener('beforeprint', () => setChartDprForPrint(true));
+    window.addEventListener('afterprint', () => setChartDprForPrint(false));
 
     function money(v) { return '$' + Number(v || 0).toLocaleString(undefined, {maximumFractionDigits:0}); }
     function pct(v) { return (Number(v || 0) * 100).toFixed(1) + '%'; }
@@ -519,7 +546,7 @@
 
     function transformedActualSeries(metricKey, rows, sfMetric, currentYm) {
       if (!rows.length) return [];
-      if (metricKey === 'total_active_pipeline' || sfMetric?.series_mode === 'snapshot') {
+      if (sfMetric?.series_mode === 'snapshot') {
         const snap = Number(sfMetric?.snapshot_value ?? sfMetric?.qtd_total ?? sfMetric?.value ?? 0);
         return rows.map(r => (r.month <= currentYm ? snap : null));
       }
@@ -1095,6 +1122,161 @@
         document.documentElement.setAttribute('data-theme', next);
         location.reload();
       };
+    }
+
+    function ensureHtml2Canvas() {
+      if (window.html2canvas) return Promise.resolve(window.html2canvas);
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+        s.onload = () => resolve(window.html2canvas);
+        s.onerror = () => reject(new Error('Failed to load html2canvas'));
+        document.head.appendChild(s);
+      });
+    }
+
+    const exportBtn = document.getElementById('export-hd');
+    function setForcedTeamViewVisibility(enabled) {
+      const ownerEls = Array.from(document.querySelectorAll('.owner-only'));
+      const teamEls = Array.from(document.querySelectorAll('.team-only'));
+      if (enabled) {
+        ownerEls.forEach((el) => {
+          el.dataset.prevDisplay = el.style.display || '';
+          el.style.setProperty('display', 'none', 'important');
+        });
+        teamEls.forEach((el) => {
+          el.dataset.prevDisplay = el.style.display || '';
+          el.style.setProperty('display', 'block', 'important');
+        });
+      } else {
+        ownerEls.forEach((el) => {
+          const prev = el.dataset.prevDisplay;
+          if (prev === undefined) return;
+          if (prev) el.style.display = prev;
+          else el.style.removeProperty('display');
+          delete el.dataset.prevDisplay;
+        });
+        teamEls.forEach((el) => {
+          const prev = el.dataset.prevDisplay;
+          if (prev === undefined) return;
+          if (prev) el.style.display = prev;
+          else el.style.removeProperty('display');
+          delete el.dataset.prevDisplay;
+        });
+      }
+    }
+
+    async function renderDashboardCanvas(scale = 3, asTeamView = true) {
+      const hadViewOnlyClass = document.documentElement.classList.contains('view-only');
+      document.documentElement.classList.add('exporting-hq');
+      document.body.classList.add('exporting-hq');
+      if (asTeamView && !VIEW_ONLY) {
+        document.documentElement.classList.add('view-only');
+        setForcedTeamViewVisibility(true);
+      }
+      setChartDprForPrint(true);
+      await new Promise(r => setTimeout(r, 140));
+      const h2c = await ensureHtml2Canvas();
+      try {
+        return await h2c(document.body, {
+          backgroundColor: '#ffffff',
+          useCORS: true,
+          scale,
+          windowWidth: document.documentElement.scrollWidth,
+          windowHeight: document.documentElement.scrollHeight,
+          scrollX: 0,
+          scrollY: -window.scrollY
+        });
+      } finally {
+        if (asTeamView && !VIEW_ONLY && !hadViewOnlyClass) {
+          setForcedTeamViewVisibility(false);
+          document.documentElement.classList.remove('view-only');
+        }
+        document.body.classList.remove('exporting-hq');
+        document.documentElement.classList.remove('exporting-hq');
+      }
+    }
+
+    if (exportBtn) {
+      exportBtn.onclick = async () => {
+        const original = exportBtn.textContent;
+        exportBtn.disabled = true;
+        exportBtn.textContent = 'Rendering...';
+        try {
+          const canvas = await renderDashboardCanvas(3, true);
+          const a = document.createElement('a');
+          const d = new Date();
+          const stamp = d.toISOString().slice(0, 10);
+          a.download = `medcurity-dashboard-${stamp}.png`;
+          a.href = canvas.toDataURL('image/png', 1.0);
+          a.click();
+        } catch (err) {
+          console.error(err);
+          alert('Could not generate HD image. Try again in a few seconds.');
+        } finally {
+          setChartDprForPrint(false);
+          exportBtn.disabled = false;
+          exportBtn.textContent = original;
+        }
+      };
+    }
+
+    function ensureJsPdf() {
+      if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+        s.onload = () => resolve(window.jspdf.jsPDF);
+        s.onerror = () => reject(new Error('Failed to load jsPDF'));
+        document.head.appendChild(s);
+      });
+    }
+
+    const pdfBtn = document.getElementById('export-pdf');
+    if (pdfBtn) {
+      pdfBtn.onclick = () => {
+        const original = pdfBtn.textContent;
+        pdfBtn.disabled = true;
+        pdfBtn.textContent = 'Rendering...';
+        (async () => {
+          try {
+            const canvas = await renderDashboardCanvas(2.5, true);
+            const jsPDF = await ensureJsPdf();
+            const d = new Date();
+            const stamp = d.toISOString().slice(0, 10);
+            const pageWidthPt = canvas.width * 72 / 220;
+            const pageHeightPt = canvas.height * 72 / 220;
+            const orientation = pageWidthPt >= pageHeightPt ? 'landscape' : 'portrait';
+            const pdf = new jsPDF({
+              orientation,
+              unit: 'pt',
+              format: [pageWidthPt, pageHeightPt],
+              compress: true
+            });
+            const img = canvas.toDataURL('image/jpeg', 0.92);
+            pdf.addImage(img, 'JPEG', 0, 0, pageWidthPt, pageHeightPt, undefined, 'FAST');
+            pdf.save(`medcurity-dashboard-one-page-${stamp}.pdf`);
+          } catch (err) {
+            console.error(err);
+            alert('Could not generate one-page PDF. Try again in a few seconds.');
+          } finally {
+            setChartDprForPrint(false);
+            pdfBtn.disabled = false;
+            pdfBtn.textContent = original;
+          }
+        })();
+      };
+    }
+
+    // Warm export dependencies in the background so first click is faster.
+    const warmExportDeps = () => {
+      ensureHtml2Canvas().catch(() => null);
+      ensureJsPdf().catch(() => null);
+    };
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(warmExportDeps, { timeout: 2500 });
+    } else {
+      setTimeout(warmExportDeps, 900);
     }
   </script>
 </body>

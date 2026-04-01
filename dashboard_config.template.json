@@ -6,7 +6,7 @@
     "provider": "salesforce",
     "pipedrive_reports_json_path": ""
   },
-  "quarter_anchor_date": "",
+  "quarter_anchor_date": "2026-03-31",
   "dashboard_metrics": [
     "arr",
     "nrr_customer_pct",
@@ -47,7 +47,8 @@
         "Close Date"
       ],
       "window_mode": "current_snapshot",
-      "series_mode": "snapshot"
+      "series_mode": "snapshot",
+      "use_history_month_end": true
     },
     "new_customers": {
       "report_id": "00ORO00000FHOX92AP",
@@ -92,7 +93,9 @@
         "Lead.MQL__c",
         "MQL"
       ],
-      "series_mode": "cumulative"
+      "series_mode": "cumulative",
+      "standard_date_column": "CREATED_DATE",
+      "fallback_to_aggregate_when_no_rows": true
     }
   },
   "excel": {
