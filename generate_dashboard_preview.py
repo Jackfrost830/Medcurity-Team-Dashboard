@@ -9,6 +9,7 @@ INDEX_OUTPUT = Path("index.html")
 GOALS_OUTPUT = Path("goals_admin.html")
 GOALS_JSON = Path("dashboard_goals.json")
 HISTORY_JSON = Path("dashboard_history.json")
+STATE_JSON = Path("dashboard_state.json")
 
 
 DEFAULT_GOALS = {
@@ -92,11 +93,28 @@ def metric_value(data: dict, key: str) -> float | None:
     return None
 
 
-def build_history_snapshot(data: dict, generated_at_utc: str) -> dict:
+def build_history_snapshot(
+    data: dict,
+    generated_at_utc: str,
+    *,
+    chart_data: dict | None = None,
+    backend_state: dict | None = None,
+    current_quarter: str | None = None,
+    arr_history: list[dict] | None = None,
+    nrr_customer_history: list[dict] | None = None,
+    nrr_dollar_history: list[dict] | None = None,
+    default_goals: dict | None = None,
+) -> dict:
     meta = data.get("meta", {}) if isinstance(data.get("meta"), dict) else {}
     quarter_anchor = parse_iso_date(str(meta.get("quarter_anchor_date", "")).strip()) or date.today()
     snapshot_date = datetime.now(timezone.utc).date()
     services = data.get("services", {}) if isinstance(data.get("services"), dict) else {}
+    cs_content = {}
+    milestones = []
+    if isinstance(backend_state, dict) and isinstance(backend_state.get("cs_content"), dict):
+        cs_content = backend_state.get("cs_content") or {}
+    if isinstance(backend_state, dict) and isinstance(backend_state.get("milestones"), list):
+        milestones = backend_state.get("milestones") or []
     metrics = {
         "arr": metric_value(data, "arr"),
         "nrr_customer_pct": metric_value(data, "nrr_customer_pct"),
@@ -111,6 +129,21 @@ def build_history_snapshot(data: dict, generated_at_utc: str) -> dict:
         "services_active_projects": float(services.get("active_projects", 0) or 0),
         "services_closed_projects_this_quarter": float(services.get("closed_projects_this_quarter", 0) or 0),
         "services_avg_project_close_days_this_quarter": float(services.get("avg_project_close_days_this_quarter", 0) or 0),
+        "quote_text": str(cs_content.get("quote_text", "") or ""),
+        "quote_name": str(cs_content.get("quote_name", "") or ""),
+        "quote_org": str(cs_content.get("quote_org", "") or ""),
+        "billing_progress": str(cs_content.get("billing_progress", "") or ""),
+        "milestones": milestones if isinstance(milestones, list) else [],
+    }
+    metrics["__frozen_snapshot"] = {
+        "data": data,
+        "chart_data": chart_data if isinstance(chart_data, dict) else {},
+        "backend_state": backend_state if isinstance(backend_state, dict) else {},
+        "current_quarter": current_quarter or quarter_label_from_date(quarter_anchor),
+        "arr_history": arr_history if isinstance(arr_history, list) else [],
+        "nrr_customer_history": nrr_customer_history if isinstance(nrr_customer_history, list) else [],
+        "nrr_dollar_history": nrr_dollar_history if isinstance(nrr_dollar_history, list) else [],
+        "default_goals": default_goals if isinstance(default_goals, dict) else {},
     }
     return {
         "quarter": quarter_label_from_date(quarter_anchor),
@@ -139,13 +172,73 @@ def snapshot_is_complete(snapshot: dict) -> bool:
 
 
 def upsert_history(history_rows: list[dict], snapshot: dict) -> list[dict]:
+    def _merge_manual_fields(existing_row: dict, incoming_row: dict) -> dict:
+        existing_metrics = existing_row.get("metrics", {}) if isinstance(existing_row.get("metrics"), dict) else {}
+        incoming_metrics = incoming_row.get("metrics", {}) if isinstance(incoming_row.get("metrics"), dict) else {}
+        if not isinstance(incoming_metrics, dict):
+            return incoming_row
+
+        def _blank(v: object) -> bool:
+            return str(v or "").strip() == ""
+
+        # Preserve manual weekly content when a regenerate arrives with blanks.
+        for key in ("quote_text", "quote_name", "quote_org", "billing_progress"):
+            if _blank(incoming_metrics.get(key)) and not _blank(existing_metrics.get(key)):
+                incoming_metrics[key] = existing_metrics.get(key)
+        # Preserve historical dev milestones if incoming snapshot omitted them.
+        if (
+            (not isinstance(incoming_metrics.get("milestones"), list) or not incoming_metrics.get("milestones"))
+            and isinstance(existing_metrics.get("milestones"), list)
+            and existing_metrics.get("milestones")
+        ):
+            incoming_metrics["milestones"] = existing_metrics.get("milestones")
+
+        # Keep frozen snapshot backend state aligned for historical drilldown.
+        incoming_frozen = incoming_metrics.get("__frozen_snapshot")
+        if isinstance(incoming_frozen, dict):
+            incoming_backend = incoming_frozen.get("backend_state")
+            if not isinstance(incoming_backend, dict):
+                incoming_backend = {}
+                incoming_frozen["backend_state"] = incoming_backend
+            incoming_cs = incoming_backend.get("cs_content")
+            if not isinstance(incoming_cs, dict):
+                incoming_cs = {}
+                incoming_backend["cs_content"] = incoming_cs
+
+            existing_frozen = existing_metrics.get("__frozen_snapshot")
+            existing_cs = {}
+            if isinstance(existing_frozen, dict):
+                existing_backend = existing_frozen.get("backend_state")
+                if isinstance(existing_backend, dict) and isinstance(existing_backend.get("cs_content"), dict):
+                    existing_cs = existing_backend.get("cs_content") or {}
+
+            for key in ("quote_text", "quote_name", "quote_org", "billing_progress"):
+                if _blank(incoming_cs.get(key)):
+                    if not _blank(incoming_metrics.get(key)):
+                        incoming_cs[key] = incoming_metrics.get(key)
+                    elif not _blank(existing_cs.get(key)):
+                        incoming_cs[key] = existing_cs.get(key)
+            incoming_ms = incoming_backend.get("milestones")
+            existing_ms = []
+            if isinstance(existing_frozen, dict):
+                eb = existing_frozen.get("backend_state")
+                if isinstance(eb, dict) and isinstance(eb.get("milestones"), list):
+                    existing_ms = eb.get("milestones") or []
+            if (not isinstance(incoming_ms, list) or not incoming_ms):
+                if isinstance(incoming_metrics.get("milestones"), list) and incoming_metrics.get("milestones"):
+                    incoming_backend["milestones"] = incoming_metrics.get("milestones")
+                elif existing_ms:
+                    incoming_backend["milestones"] = existing_ms
+        incoming_row["metrics"] = incoming_metrics
+        return incoming_row
+
     key = (snapshot.get("quarter"), snapshot.get("week_start"))
     out: list[dict] = []
     replaced = False
     for row in history_rows:
         row_key = (row.get("quarter"), row.get("week_start"))
         if row_key == key:
-            out.append(snapshot)
+            out.append(_merge_manual_fields(row, snapshot))
             replaced = True
         else:
             out.append(row)
@@ -175,6 +268,24 @@ def main() -> None:
     live_arr = (sf.get("arr", {}) or {}).get("value") or (dash.get("arr", {}) or {}).get("value") or 0
     arr_history = [*ARR_HISTORY_POINTS, {"quarter": current_q_label, "value": live_arr}]
     generated_at_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    backend_state = {"goals_by_quarter": {}, "cs_content": {}, "milestones": [], "state_backend": "local_file"}
+    if STATE_JSON.exists():
+        try:
+            state_store = json.loads(STATE_JSON.read_text())
+            if isinstance(state_store, dict):
+                current_state = state_store.get(current_q_label, {})
+                if isinstance(current_state, dict):
+                    goals = current_state.get("goals", {})
+                    cs_content = current_state.get("cs_content", {})
+                    milestones = current_state.get("milestones", [])
+                    backend_state = {
+                        "goals_by_quarter": {current_q_label: goals if isinstance(goals, dict) else {}},
+                        "cs_content": cs_content if isinstance(cs_content, dict) else {},
+                        "milestones": milestones if isinstance(milestones, list) else [],
+                        "state_backend": "local_file",
+                    }
+        except json.JSONDecodeError:
+            pass
 
     if HISTORY_JSON.exists():
         try:
@@ -185,7 +296,33 @@ def main() -> None:
             history_data = []
     else:
         history_data = []
-    snapshot = build_history_snapshot(data, generated_at_utc)
+    snapshot = build_history_snapshot(
+        data,
+        generated_at_utc,
+        chart_data=chart_data,
+        backend_state=backend_state,
+        current_quarter=current_q_label,
+        arr_history=arr_history,
+        nrr_customer_history=[
+            *NRR_CUSTOMER_HISTORY_POINTS,
+            {
+                "quarter": current_q_label,
+                "value": (dash.get("nrr_customer_pct", {}) or {}).get(
+                    "value", (sf.get("nrr_customer_pct", {}) or {}).get("value", 0)
+                ),
+            },
+        ],
+        nrr_dollar_history=[
+            *NRR_DOLLAR_HISTORY_POINTS,
+            {
+                "quarter": current_q_label,
+                "value": (dash.get("nrr_dollar_pct", {}) or {}).get(
+                    "value", (sf.get("nrr_dollar_pct", {}) or {}).get("value", 0)
+                ),
+            },
+        ],
+        default_goals=DEFAULT_GOALS,
+    )
     if snapshot_is_complete(snapshot):
         history_data = upsert_history(history_data, snapshot)
         HISTORY_JSON.write_text(json.dumps(history_data, indent=2))
@@ -333,7 +470,7 @@ def main() -> None:
         <div class=\"stamp-main\" id=\"stamp-main\"></div>
         <div class=\"stamp-sub\" id=\"stamp-sub\"></div>
       </div>
-      <div class=\"actions\"><button id=\"theme-toggle\" type=\"button\">Toggle Theme</button><button id=\"export-hd\" type=\"button\">Download HD PNG</button><button id=\"export-pdf\" type=\"button\">Print HQ PDF</button><a href=\"goals_admin.html\">Goals Admin</a></div>
+      <div class=\"actions\"><button id=\"theme-toggle\" type=\"button\">Toggle Theme</button><button id=\"export-pdf\" type=\"button\">Print HQ PDF</button><a href=\"goals_admin\">Goals Admin</a></div>
     </div>
 
     <div class=\"sections\">
@@ -450,8 +587,14 @@ def main() -> None:
     const NRR_CUSTOMER_HISTORY = {js([*NRR_CUSTOMER_HISTORY_POINTS, {"quarter": current_q_label, "value": (dash.get("nrr_customer_pct", {}) or {}).get("value", (sf.get("nrr_customer_pct", {}) or {}).get("value", 0))}])};
     const GENERATED_AT = {js(generated_at_utc)};
     const CURRENT_QUARTER = {js(current_q_label)};
+    const HISTORY_DATA = {js(history_data)};
+    const BACKEND_STATE = {js(backend_state)};
     const VIEW_ONLY = false;
     if (VIEW_ONLY) document.documentElement.classList.add('view-only');
+    const SNAPSHOT_QUERY = new URLSearchParams(window.location.search || '');
+    const SNAPSHOT_QUARTER = String(SNAPSHOT_QUERY.get('snapshot_quarter') || '').trim();
+    const SNAPSHOT_WEEK_START = String(SNAPSHOT_QUERY.get('snapshot_week_start') || '').trim();
+    let IS_SNAPSHOT_VIEW = false;
     const THEME_KEY = 'dashboard_theme_v1';
     const savedTheme = localStorage.getItem(THEME_KEY) || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme === 'dark' ? 'dark' : 'light');
@@ -488,6 +631,14 @@ def main() -> None:
     function money(v) {{ return '$' + Number(v || 0).toLocaleString(undefined, {{maximumFractionDigits:0}}); }}
     function pct(v) {{ return (Number(v || 0) * 100).toFixed(1) + '%'; }}
     function num(v) {{ return Number(v || 0).toLocaleString(undefined, {{maximumFractionDigits:0}}); }}
+    function persistBackendState(payload) {{
+      if (VIEW_ONLY || IS_SNAPSHOT_VIEW) return;
+      fetch('/api/dashboard_state', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{ quarter: CURRENT_QUARTER, ...payload }})
+      }}).catch(() => {{}});
+    }}
 
     function normalizeGoalEntry(raw, fallback, metricKey = '') {{
       if (metricKey === 'total_active_pipeline') {{
@@ -559,25 +710,32 @@ def main() -> None:
     function loadGoalStore() {{
       try {{
         const raw = localStorage.getItem('dashboard_goals_by_quarter_v1');
-        if (!raw) return {{}};
+        if (!raw) {{
+          return (BACKEND_STATE && BACKEND_STATE.goals_by_quarter && typeof BACKEND_STATE.goals_by_quarter === 'object')
+            ? BACKEND_STATE.goals_by_quarter
+            : {{}};
+        }}
         const parsed = JSON.parse(raw);
         return parsed && typeof parsed === 'object' ? parsed : {{}};
       }} catch (e) {{
-        return {{}};
+        return (BACKEND_STATE && BACKEND_STATE.goals_by_quarter && typeof BACKEND_STATE.goals_by_quarter === 'object')
+          ? BACKEND_STATE.goals_by_quarter
+          : {{}};
       }}
     }}
 
     function loadGoals() {{
       const store = loadGoalStore();
-      if (store[CURRENT_QUARTER] && typeof store[CURRENT_QUARTER] === 'object') {{
+      const activeQuarter = (IS_SNAPSHOT_VIEW && SNAPSHOT_QUARTER) ? SNAPSHOT_QUARTER : CURRENT_QUARTER;
+      if (store[activeQuarter] && typeof store[activeQuarter] === 'object') {{
         const out = {{}};
-        Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(store[CURRENT_QUARTER][k], DEFAULT_GOALS[k], k));
+        Object.keys(DEFAULT_GOALS).forEach(k => out[k] = normalizeGoalEntry(store[activeQuarter][k], DEFAULT_GOALS[k], k));
         return out;
       }}
       const legacy = loadLegacyGoals();
       if (legacy) {{
         if (!VIEW_ONLY) {{
-          store[CURRENT_QUARTER] = legacy;
+          store[activeQuarter] = legacy;
           localStorage.setItem('dashboard_goals_by_quarter_v1', JSON.stringify(store));
         }}
         return legacy;
@@ -744,6 +902,9 @@ def main() -> None:
       }}
 
       const raw = rows.map(r => Number(r.value || 0));
+      if (sfMetric?.series_mode === 'month_end_snapshot') {{
+        return rows.map((r, i) => (r.month <= currentYm ? raw[i] : null));
+      }}
       if (sfMetric?.series_mode === 'cumulative') {{
         return rows.map((r, i) => (r.month <= currentYm ? raw[i] : null));
       }}
@@ -1039,11 +1200,29 @@ def main() -> None:
     }}
 
     function loadCsContent() {{
+      if (IS_SNAPSHOT_VIEW && BACKEND_STATE && BACKEND_STATE.cs_content && typeof BACKEND_STATE.cs_content === 'object') {{
+        return {{
+          quote_text: String(BACKEND_STATE.cs_content.quote_text || ''),
+          quote_name: String(BACKEND_STATE.cs_content.quote_name || ''),
+          quote_org: String(BACKEND_STATE.cs_content.quote_org || ''),
+          billing_progress: String(BACKEND_STATE.cs_content.billing_progress || '')
+        }};
+      }}
       try {{
         const raw = localStorage.getItem(CS_CONTENT_KEY)
           || localStorage.getItem('dashboard_cs_content_shared_v1')
           || localStorage.getItem('dashboard_cs_content_v1');
-        if (!raw) return {{ quote_text: '', quote_name: '', quote_org: '', billing_progress: '' }};
+        if (!raw) {{
+          if (BACKEND_STATE && BACKEND_STATE.cs_content && typeof BACKEND_STATE.cs_content === 'object') {{
+            return {{
+              quote_text: String(BACKEND_STATE.cs_content.quote_text || ''),
+              quote_name: String(BACKEND_STATE.cs_content.quote_name || ''),
+              quote_org: String(BACKEND_STATE.cs_content.quote_org || ''),
+              billing_progress: String(BACKEND_STATE.cs_content.billing_progress || '')
+            }};
+          }}
+          return {{ quote_text: '', quote_name: '', quote_org: '', billing_progress: '' }};
+        }}
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object') return {{ quote_text: '', quote_name: '', quote_org: '', billing_progress: '' }};
         return {{
@@ -1061,12 +1240,20 @@ def main() -> None:
       localStorage.setItem(CS_CONTENT_KEY, JSON.stringify(content));
       localStorage.setItem('dashboard_cs_content_shared_v1', JSON.stringify(content));
       localStorage.setItem('dashboard_cs_content_v1', JSON.stringify(content));
+      persistBackendState({{ cs_content: content }});
     }}
 
     function loadMilestones() {{
+      if (IS_SNAPSHOT_VIEW && Array.isArray(BACKEND_STATE?.milestones)) {{
+        if (BACKEND_STATE.milestones.length) return BACKEND_STATE.milestones;
+        return DEFAULT_MILESTONES;
+      }}
       try {{
         const raw = localStorage.getItem(MILESTONE_KEY);
-        if (!raw) return DEFAULT_MILESTONES;
+        if (!raw) {{
+          if (Array.isArray(BACKEND_STATE?.milestones) && BACKEND_STATE.milestones.length) return BACKEND_STATE.milestones;
+          return DEFAULT_MILESTONES;
+        }}
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) return DEFAULT_MILESTONES;
         return parsed;
@@ -1077,6 +1264,196 @@ def main() -> None:
 
     function saveMilestones(items) {{
       localStorage.setItem(MILESTONE_KEY, JSON.stringify(items));
+      persistBackendState({{ milestones: items }});
+    }}
+
+    function syncObject(target, source) {{
+      if (!target || typeof target !== 'object') return;
+      if (!source || typeof source !== 'object') return;
+      Object.keys(target).forEach((k) => {{ delete target[k]; }});
+      Object.entries(source).forEach(([k, v]) => {{
+        target[k] = JSON.parse(JSON.stringify(v));
+      }});
+    }}
+
+    function syncArray(target, source) {{
+      if (!Array.isArray(target)) return;
+      if (!Array.isArray(source)) return;
+      target.length = 0;
+      source.forEach((item) => target.push(JSON.parse(JSON.stringify(item))));
+    }}
+
+    function applySnapshotFromQuery() {{
+      const q = SNAPSHOT_QUARTER;
+      const w = SNAPSHOT_WEEK_START;
+      if (!q || !w || !Array.isArray(HISTORY_DATA) || !HISTORY_DATA.length) return;
+      const row = HISTORY_DATA.find(r => String(r?.quarter || '') === q && String(r?.week_start || '') === w);
+      if (!row || typeof row !== 'object') return;
+      const findNearestHistoricalMilestones = () => {{
+        const rows = HISTORY_DATA
+          .filter(r => String(r?.quarter || '') === q && String(r?.week_start || '') <= String(w))
+          .sort((a, b) => String(b?.week_start || '').localeCompare(String(a?.week_start || '')));
+        for (const rr of rows) {{
+          const mm = rr?.metrics?.milestones;
+          if (Array.isArray(mm) && mm.length) return mm;
+          const fb = rr?.metrics?.__frozen_snapshot?.backend_state?.milestones;
+          if (Array.isArray(fb) && fb.length) return fb;
+        }}
+        return [];
+      }};
+      IS_SNAPSHOT_VIEW = true;
+      const m = row.metrics || {{}};
+      const frozen = m.__frozen_snapshot;
+      if (frozen && typeof frozen === 'object') {{
+        if (frozen.data && typeof frozen.data === 'object') syncObject(DATA, frozen.data);
+        if (frozen.chart_data && typeof frozen.chart_data === 'object') syncObject(CHART_DATA, frozen.chart_data);
+        if (frozen.backend_state && typeof frozen.backend_state === 'object') syncObject(BACKEND_STATE, frozen.backend_state);
+        if (Array.isArray(frozen.arr_history)) syncArray(ARR_HISTORY, frozen.arr_history);
+        if (Array.isArray(frozen.nrr_customer_history)) syncArray(NRR_CUSTOMER_HISTORY, frozen.nrr_customer_history);
+        if (Array.isArray(frozen.nrr_dollar_history)) syncArray(NRR_DOLLAR_HISTORY, frozen.nrr_dollar_history);
+        if (frozen.default_goals && typeof frozen.default_goals === 'object') syncObject(DEFAULT_GOALS, frozen.default_goals);
+        // Historical views must stay immutable: never hydrate from current/live state.
+        // Only use values carried in the snapshot row itself (or historical fallbacks).
+        if (BACKEND_STATE && typeof BACKEND_STATE === 'object') {{
+          if (!BACKEND_STATE.cs_content || typeof BACKEND_STATE.cs_content !== 'object') BACKEND_STATE.cs_content = {{}};
+          const stillMissingMilestones = !Array.isArray(BACKEND_STATE.milestones) || !BACKEND_STATE.milestones.length;
+          if ((!Array.isArray(BACKEND_STATE.milestones) || !BACKEND_STATE.milestones.length)) {{
+            const histMs = findNearestHistoricalMilestones();
+            if (Array.isArray(histMs) && histMs.length) BACKEND_STATE.milestones = histMs;
+          }}
+        }}
+        if (!DATA.meta || typeof DATA.meta !== 'object') DATA.meta = {{}};
+        DATA.meta.generated_at_utc = `Snapshot ${{row.snapshot_date || ''}}`;
+        return;
+      }}
+
+      const map = {{
+        arr: 'arr',
+        new_sales: 'new_sales',
+        total_active_pipeline: 'total_active_pipeline',
+        new_customers: 'new_customers',
+        sql: 'sql',
+        mql: 'mql',
+        renewals_number: 'renewals_number',
+        nrr_customer_pct: 'nrr_customer_pct',
+        nrr_dollar_pct: 'nrr_dollar_pct'
+      }};
+      Object.entries(map).forEach(([src, dst]) => {{
+        const v = m[src];
+        if (v === null || v === undefined) return;
+        if (!DATA.dashboard) DATA.dashboard = {{}};
+        DATA.dashboard[dst] = {{ value: Number(v), source: 'history_snapshot' }};
+        if (!DATA.salesforce) DATA.salesforce = {{}};
+        if (!DATA.salesforce[dst] || typeof DATA.salesforce[dst] !== 'object') DATA.salesforce[dst] = {{}};
+        DATA.salesforce[dst].qtd_total = Number(v);
+      }});
+      if (!DATA.meta) DATA.meta = {{}};
+      if (row.quarter_anchor_date) DATA.meta.quarter_anchor_date = String(row.quarter_anchor_date);
+      DATA.meta.generated_at_utc = `Snapshot ${{row.snapshot_date || ''}}`;
+
+      if (BACKEND_STATE && typeof BACKEND_STATE === 'object') {{
+        if (!BACKEND_STATE.cs_content || typeof BACKEND_STATE.cs_content !== 'object') BACKEND_STATE.cs_content = {{}};
+        const mQuote = String(m.quote_text ?? '').trim();
+        const mName = String(m.quote_name ?? '').trim();
+        const mOrg = String(m.quote_org ?? '').trim();
+        const mBill = String(m.billing_progress ?? '').trim();
+        const mMilestones = Array.isArray(m.milestones) ? m.milestones : null;
+        // For legacy rows with empty quote/billing fields, keep existing state.
+        if (mQuote) BACKEND_STATE.cs_content.quote_text = mQuote;
+        if (mName) BACKEND_STATE.cs_content.quote_name = mName;
+        if (mOrg) BACKEND_STATE.cs_content.quote_org = mOrg;
+        if (mBill) BACKEND_STATE.cs_content.billing_progress = mBill;
+        if (mMilestones && mMilestones.length) BACKEND_STATE.milestones = mMilestones;
+        if (!mMilestones || !mMilestones.length) {{
+          const histMs = findNearestHistoricalMilestones();
+          if (Array.isArray(histMs) && histMs.length) BACKEND_STATE.milestones = histMs;
+        }}
+        // Historical views remain immutable: do not pull quote/billing from live local state.
+      }}
+
+      if (!DATA.services || typeof DATA.services !== 'object') DATA.services = {{}};
+      if (m.services_active_projects !== null && m.services_active_projects !== undefined) DATA.services.active_projects = Number(m.services_active_projects);
+      if (m.services_closed_projects_this_quarter !== null && m.services_closed_projects_this_quarter !== undefined) DATA.services.closed_projects_this_quarter = Number(m.services_closed_projects_this_quarter);
+      if (m.services_avg_project_close_days_this_quarter !== null && m.services_avg_project_close_days_this_quarter !== undefined) DATA.services.avg_project_close_days_this_quarter = Number(m.services_avg_project_close_days_this_quarter);
+      const snapMonthSource = String(row.snapshot_date || row.week_start || row.quarter_anchor_date || '');
+      const snapYm = snapMonthSource.slice(0, 7);
+
+      // Rebuild historical chart rows for legacy (non-frozen) snapshots.
+      // Strategy:
+      // 1) Use best available frozen baseline series in this quarter (usually latest week),
+      // 2) keep prior months from baseline,
+      // 3) override selected snapshot month with that week's metric value,
+      // 4) hide future months.
+      const qm = /^Q([1-4])-(\\d{{4}})$/.exec(String(q || ''));
+      if (qm) {{
+        const qNum = Number(qm[1]);
+        const qYear = Number(qm[2]);
+        const startMonth = (qNum - 1) * 3;
+        const monthRows = Array.from({{ length: 3 }}, (_, i) => {{
+          const dt = new Date(qYear, startMonth + i, 1);
+          const mm = String(dt.getMonth() + 1).padStart(2, '0');
+          return {{
+            month: `${{dt.getFullYear()}}-${{mm}}`,
+            label: dt.toLocaleString(undefined, {{ month: 'short' }})
+          }};
+        }});
+        const quarterRowsDesc = HISTORY_DATA
+          .filter(r => String(r?.quarter || '') === q)
+          .sort((a, b) => String(b?.week_start || '').localeCompare(String(a?.week_start || '')));
+        const metricKeys = ['new_sales','total_active_pipeline','new_customers','sql','mql','renewals_number'];
+        metricKeys.forEach((k) => {{
+          let baseline = null;
+          for (const rr of quarterRowsDesc) {{
+            const series = rr?.metrics?.__frozen_snapshot?.chart_data?.[k];
+            if (Array.isArray(series) && series.length) {{
+              baseline = series.map((pt, i) => {{
+                const mr = monthRows[i] || {{}};
+                return {{
+                  month: String(pt?.month || mr.month || ''),
+                  label: String(pt?.label || mr.label || ''),
+                  value: (pt && pt.value !== undefined && pt.value !== null) ? Number(pt.value) : null
+                }};
+              }});
+              break;
+            }}
+          }}
+          const rebuilt = monthRows.map((mr, i) => {{
+            const b = Array.isArray(baseline) ? baseline[i] : null;
+            if (b && String(b.month || '') === mr.month) {{
+              return {{ month: mr.month, label: mr.label, value: Number.isFinite(Number(b.value)) ? Number(b.value) : null }};
+            }}
+            const curr = Array.isArray(CHART_DATA[k]) ? CHART_DATA[k][i] : null;
+            if (curr && String(curr.month || '') === mr.month) {{
+              return {{ month: mr.month, label: mr.label, value: (curr.value === null || curr.value === undefined) ? null : Number(curr.value) }};
+            }}
+            return {{ month: mr.month, label: mr.label, value: null }};
+          }});
+          // Ensure selected snapshot week's month uses that week's metric.
+          const snapIndex = rebuilt.findIndex(pt => String(pt?.month || '') === snapYm);
+          const snapVal = Number(m[k]);
+          if (snapIndex >= 0 && Number.isFinite(snapVal)) rebuilt[snapIndex].value = snapVal;
+          CHART_DATA[k] = rebuilt;
+        }});
+      }}
+
+      // Enforce month-aware historical rendering:
+      // if snapshot is from Feb, March actual points must remain hidden.
+      if (snapYm && CHART_DATA && typeof CHART_DATA === 'object') {{
+        ['new_sales','total_active_pipeline','new_customers','sql','mql','renewals_number'].forEach((k) => {{
+          const rows = Array.isArray(CHART_DATA[k]) ? CHART_DATA[k] : [];
+          rows.forEach((pt) => {{
+            if (!pt || typeof pt !== 'object') return;
+            if (String(pt.month || '') > snapYm) pt.value = null;
+          }});
+          const snapMetric = Number(m[k]);
+          if (Number.isFinite(snapMetric)) {{
+            const snapIndex = rows.findIndex((pt) => String(pt?.month || '') === snapYm);
+            if (snapIndex >= 0 && rows[snapIndex] && typeof rows[snapIndex] === 'object') {{
+              rows[snapIndex].value = snapMetric;
+            }}
+          }}
+        }});
+      }}
     }}
 
     function milestoneStatus(item) {{
@@ -1108,6 +1485,7 @@ def main() -> None:
       }}).join('');
     }}
 
+    applySnapshotFromQuery();
     const sf = DATA.salesforce || {{}};
     const dash = DATA.dashboard || {{}};
     const services = DATA.services || {{}};
@@ -1179,7 +1557,7 @@ def main() -> None:
       pctEl.textContent = money(progressNum) + ' (' + (ratio * 100).toFixed(1) + '%)';
     }}
     // On owner view, normalize persisted content keys so team view can read the same payload.
-    if (!VIEW_ONLY) {{
+    if (!VIEW_ONLY && !IS_SNAPSHOT_VIEW) {{
       saveCsContent({{
         quote_text: csContent.quote_text || '',
         quote_name: csContent.quote_name || '',
@@ -1260,6 +1638,7 @@ def main() -> None:
     }}
 
     const handleCsContentUpdate = () => {{
+      if (IS_SNAPSHOT_VIEW) return;
       saveCsContent({{
         quote_text: quoteText?.value || '',
         quote_name: quoteName?.value || '',
@@ -1282,8 +1661,8 @@ def main() -> None:
     }});
 
     function applyViewMode() {{
-      if (!VIEW_ONLY) return;
-      const goalsLink = document.querySelector('a[href="goals_admin.html"]');
+      if (!(VIEW_ONLY || IS_SNAPSHOT_VIEW)) return;
+      const goalsLink = document.querySelector('a[href="goals_admin"]');
       if (goalsLink) goalsLink.remove();
       const editBtn = document.getElementById('edit-milestones');
       const addBtn = document.getElementById('add-milestone');
@@ -1327,7 +1706,6 @@ def main() -> None:
       }});
     }}
 
-    const exportBtn = document.getElementById('export-hd');
     function setForcedTeamViewVisibility(enabled) {{
       const ownerEls = Array.from(document.querySelectorAll('.owner-only'));
       const teamEls = Array.from(document.querySelectorAll('.team-only'));
@@ -1387,30 +1765,6 @@ def main() -> None:
         document.body.classList.remove('exporting-hq');
         document.documentElement.classList.remove('exporting-hq');
       }}
-    }}
-
-    if (exportBtn) {{
-      exportBtn.onclick = async () => {{
-        const original = exportBtn.textContent;
-        exportBtn.disabled = true;
-        exportBtn.textContent = 'Rendering...';
-        try {{
-          const canvas = await renderDashboardCanvas(3, true);
-          const a = document.createElement('a');
-          const d = new Date();
-          const stamp = d.toISOString().slice(0, 10);
-          a.download = `medcurity-dashboard-${{stamp}}.png`;
-          a.href = canvas.toDataURL('image/png', 1.0);
-          a.click();
-        }} catch (err) {{
-          console.error(err);
-          alert('Could not generate HD image. Try again in a few seconds.');
-        }} finally {{
-          setChartDprForPrint(false);
-          exportBtn.disabled = false;
-          exportBtn.textContent = original;
-        }}
-      }};
     }}
 
     function ensureJsPdf() {{
@@ -1505,6 +1859,8 @@ def main() -> None:
     table {{ width:100%; border-collapse:collapse; min-width:980px; }}
     th, td {{ border-bottom:1px solid #e6eef8; padding:8px; font-size:12px; text-align:left; white-space:nowrap; }}
     th {{ color:#5f7190; font-size:11px; text-transform:uppercase; letter-spacing:.05em; background:#f8fbff; }}
+    .history-links {{ display:flex; flex-direction:column; gap:4px; align-items:flex-start; min-width:120px; }}
+    .history-links .small {{ line-height:1.2; }}
     .muted {{ color:#7085a4; }}
     @media (max-width: 980px) {{ .row, .head {{ grid-template-columns: 1fr; }} }}
   </style>
@@ -1534,7 +1890,7 @@ def main() -> None:
       <div class=\"btns\">
         <button id=\"save\">Save Goals</button>
         <button id=\"reset\">Reset Quarter Defaults</button>
-        <a href=\"dashboard_preview.html\">Back To Dashboard</a>
+        <a href=\"dashboard_preview\">Back To Dashboard</a>
       </div>
     </div>
 
@@ -1572,6 +1928,7 @@ def main() -> None:
     const DEFAULT_GOALS = {js(DEFAULT_GOALS)};
     const CURRENT_QUARTER = {js(current_q_label)};
     const HISTORY_DATA = {js(history_data)};
+    const BACKEND_STATE = {js(backend_state)};
     const GOALS_BY_QUARTER_KEY = 'dashboard_goals_by_quarter_v1';
     const GOALS_LOCK_BY_QUARTER_KEY = 'dashboard_goals_lock_by_quarter_v1';
     let goalsEditEnabled = false;
@@ -1638,6 +1995,9 @@ def main() -> None:
           if (parsed && typeof parsed === 'object') return parsed;
         }}
       }} catch (e) {{}}
+      if (BACKEND_STATE && BACKEND_STATE.goals_by_quarter && typeof BACKEND_STATE.goals_by_quarter === 'object') {{
+        return BACKEND_STATE.goals_by_quarter;
+      }}
       const migrated = {{}};
       try {{
         const v2 = localStorage.getItem('dashboard_goals_v2');
@@ -1663,6 +2023,11 @@ def main() -> None:
       store[quarter] = goals;
       localStorage.setItem(GOALS_BY_QUARTER_KEY, JSON.stringify(store));
       localStorage.setItem('dashboard_goals_v2', JSON.stringify(goals));
+      fetch('/api/dashboard_state', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{ quarter, goals }})
+      }}).catch(() => {{}});
     }}
 
     function loadLockStore() {{
@@ -1835,6 +2200,14 @@ def main() -> None:
         const prev = rows[idx + 1];
         const m = row.metrics || {{}};
         const pm = prev ? (prev.metrics || {{}}) : null;
+        const teamSnapLink = '/dashboard_team_view?snapshot_quarter='
+          + encodeURIComponent(String(row.quarter || ''))
+          + '&snapshot_week_start='
+          + encodeURIComponent(String(row.week_start || ''));
+        const adminSnapLink = '/dashboard_preview?snapshot_quarter='
+          + encodeURIComponent(String(row.quarter || ''))
+          + '&snapshot_week_start='
+          + encodeURIComponent(String(row.week_start || ''));
         const deltaBits = pm ? [
           `Sales ${{fmtDelta(m.new_sales, pm.new_sales, 'currency')}}`,
           `Pipeline ${{fmtDelta(m.total_active_pipeline, pm.total_active_pipeline, 'currency')}}`,
@@ -1847,7 +2220,7 @@ def main() -> None:
           `ARR ${{fmtDelta(m.arr, pm.arr, 'currency')}}`
         ].join('<br/>') : 'Baseline week';
         return `<tr>`
-          + `<td>${{row.week_start || ''}}</td>`
+          + `<td><div class=\"history-links\"><a href=\"${{teamSnapLink}}\" target=\"_blank\" rel=\"noopener\">${{row.week_start || ''}}</a><span class=\"small\"><a href=\"${{adminSnapLink}}\" target=\"_blank\" rel=\"noopener\">Admin view</a></span></div></td>`
           + `<td>${{row.snapshot_date || ''}}</td>`
           + `<td>${{money(m.arr)}}</td>`
           + `<td>${{money(m.new_sales)}}</td>`
@@ -1975,8 +2348,8 @@ def main() -> None:
         dashboard_html
         .replace("<title>Medcurity Dashboard Preview</title>", "<title>Medcurity Team Dashboard</title>")
         .replace("const VIEW_ONLY = false;", "const VIEW_ONLY = true;")
-        .replace('<a href="goals_admin.html">Goals Admin</a>', '')
-        .replace('><a href=\\"goals_admin.html\\">Goals Admin</a>', '>')
+        .replace('<a href="goals_admin">Goals Admin</a>', '')
+        .replace('><a href=\\"goals_admin\\">Goals Admin</a>', '>')
     )
 
     DASHBOARD_OUTPUT.write_text(dashboard_html)
