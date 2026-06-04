@@ -7,6 +7,12 @@
     "pipedrive_reports_json_path": ""
   },
   "quarter_anchor_date": "2026-03-31",
+  "hardcoded_overrides": {
+    "2026-03-31": {
+      "arr": 1001208,
+      "total_active_pipeline": 859436
+    }
+  },
   "dashboard_metrics": [
     "arr",
     "nrr_customer_pct",
@@ -47,7 +53,7 @@
         "Close Date"
       ],
       "window_mode": "current_snapshot",
-      "series_mode": "snapshot",
+      "series_mode": "month_end_snapshot",
       "use_history_month_end": true
     },
     "new_customers": {
@@ -95,7 +101,8 @@
       ],
       "series_mode": "cumulative",
       "standard_date_column": "CREATED_DATE",
-      "fallback_to_aggregate_when_no_rows": true
+      "fallback_to_aggregate_when_no_rows": true,
+      "use_standard_date_override": false
     }
   },
   "excel": {
@@ -120,6 +127,12 @@
         "done",
         "cancelled",
         "canceled"
+      ],
+      "kickoff_field_names": [
+        "SRA Kickoff",
+        "SRA Kickoff (SRA)",
+        "SRA Kickoff Date",
+        "Kickoff Date"
       ],
       "red_item_threshold": 3,
       "red_items_field": ""

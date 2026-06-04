@@ -1,0 +1,82 @@
+{
+  "new_sales": {
+    "quarter_goal": 36000,
+    "month_goals": [
+      null,
+      null,
+      null
+    ]
+  },
+  "total_active_pipeline": {
+    "quarter_goal": 800000,
+    "month_goals": [
+      800000,
+      800000,
+      800000
+    ]
+  },
+  "new_customers": {
+    "quarter_goal": 24,
+    "month_goals": [
+      null,
+      null,
+      null
+    ]
+  },
+  "arr": {
+    "quarter_goal": 1100000,
+    "month_goals": [
+      null,
+      null,
+      null
+    ]
+  },
+  "sql": {
+    "quarter_goal": 15,
+    "month_goals": [
+      null,
+      null,
+      null
+    ]
+  },
+  "mql": {
+    "quarter_goal": 75,
+    "month_goals": [
+      null,
+      null,
+      null
+    ]
+  },
+  "renewals_number": {
+    "quarter_goal": 150000,
+    "month_goals": [
+      null,
+      null,
+      null
+    ]
+  },
+  "nrr_customer_pct": {
+    "quarter_goal": 0.9,
+    "month_goals": [
+      null,
+      null,
+      null
+    ]
+  },
+  "nrr_dollar_pct": {
+    "quarter_goal": 0.9,
+    "month_goals": [
+      null,
+      null,
+      null
+    ]
+  },
+  "qtd_billing_progress": {
+    "quarter_goal": 350000,
+    "month_goals": [
+      null,
+      null,
+      null
+    ]
+  }
+}

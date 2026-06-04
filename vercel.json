@@ -1,9 +1,20 @@
 {
   "trailingSlash": false,
-  "rewrites": [
-    { "source": "/", "destination": "/dashboard_team_view.html" },
-    { "source": "/dashboard_team_view", "destination": "/dashboard_team_view.html" },
-    { "source": "/dashboard_preview", "destination": "/dashboard_preview.html" },
-    { "source": "/goals_admin", "destination": "/goals_admin.html" }
+  "routes": [
+    { "src": "^/$", "dest": "/api/dashboard_team_view" },
+    { "src": "^/index\\.html$", "dest": "/api/dashboard_team_view" },
+    { "src": "^/dashboard_team_view$", "dest": "/api/dashboard_team_view" },
+    { "src": "^/dashboard_team_view\\.html$", "dest": "/api/dashboard_team_view" },
+    { "src": "^/dashboard_preview$", "dest": "/api/dashboard_preview" },
+    { "src": "^/dashboard_preview\\.html$", "dest": "/api/dashboard_preview" },
+    { "src": "^/goals_admin$", "dest": "/api/goals_admin" },
+    { "src": "^/goals_admin\\.html$", "dest": "/api/goals_admin" },
+    { "src": "^/dashboard_data$", "dest": "/api/dashboard_data" },
+    { "src": "^/dashboard_state$", "dest": "/api/dashboard_state" },
+    { "src": "^/lock_weekly_snapshot$", "dest": "/api/lock_weekly_snapshot" },
+    { "handle": "filesystem" }
+  ],
+  "crons": [
+    { "path": "/api/lock_weekly_snapshot", "schedule": "59 6 * * 2" }
   ]
 }

@@ -658,6 +658,23 @@ def task_custom_field_value(task: dict[str, Any], field_key_or_name: str) -> Any
     return None
 
 
+def task_custom_field_datetime(task: dict[str, Any], field_names: set[str]) -> datetime | None:
+    if not field_names:
+        return None
+    for field in task.get("custom_fields", []) or []:
+        fname = str(field.get("name", "")).strip().lower()
+        if fname not in field_names:
+            continue
+        raw = field.get("value")
+        dt = parse_epoch_ms_datetime(raw)
+        if dt is not None:
+            return dt
+        parsed_date = parse_date(raw)
+        if parsed_date is not None:
+            return datetime.combine(parsed_date, datetime.min.time())
+    return None
+
+
 def _quarter_sort_key(label: str) -> tuple[int, int]:
     m = re.match(r"^\s*(\d{4})\s+Q([1-4])\s*$", str(label or ""))
     if not m:
@@ -849,6 +866,7 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
     tasks = fetch_clickup_list_tasks(list_id, include_closed=True)
     active_count = 0
     closed_this_quarter = 0
+    closed_names_this_quarter: set[str] = set()
     close_day_values: list[float] = []
     sra_final_closed_count = 0
     sra_final_closed_names: set[str] = set()
@@ -859,6 +877,14 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
         for name in clickup_cfg.get(
             "sra_final_field_names",
             ["Present Final SRA Report (SRA)", "Present Final SRA Report"],
+        )
+        if str(name).strip()
+    }
+    kickoff_field_names = {
+        str(name).strip().lower()
+        for name in clickup_cfg.get(
+            "kickoff_field_names",
+            ["SRA Kickoff", "SRA Kickoff (SRA)", "SRA Kickoff Date", "Kickoff Date"],
         )
         if str(name).strip()
     }
@@ -874,8 +900,13 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
         closed_dt = parse_epoch_ms_datetime(task.get("date_closed"))
         if is_closed and closed_dt is not None and q_start <= closed_dt.date() < q_end:
             closed_this_quarter += 1
-            if created_dt is not None and closed_dt >= created_dt:
-                close_day_values.append((closed_dt - created_dt).total_seconds() / 86400.0)
+            task_name = str(task.get("name", "")).strip()
+            if task_name:
+                closed_names_this_quarter.add(task_name)
+            kickoff_dt = task_custom_field_datetime(task, kickoff_field_names)
+            start_dt = kickoff_dt or created_dt
+            if start_dt is not None and closed_dt >= start_dt:
+                close_day_values.append((closed_dt - start_dt).total_seconds() / 86400.0)
 
         # Use SRA final report date as close marker when teams close work without
         # immediately reflecting task status transitions.
@@ -924,6 +955,8 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
                 pass
 
     avg_close_days = sum(close_day_values) / len(close_day_values) if close_day_values else 0.0
+    close_day_sample_sum = sum(close_day_values)
+    close_day_sample_count = len(close_day_values)
     overall_status = "green" if not projects_over_threshold else "red"
     status_breakdown = [
         {"status": status, "count": count}
@@ -935,9 +968,12 @@ def compute_services_from_clickup(config: dict[str, Any], anchor_date: date) -> 
         "quarter": quarter_label(anchor_date),
         "active_projects": active_count,
         "closed_projects_this_quarter": closed_this_quarter,
+        "closed_projects_this_quarter_names": sorted(closed_names_this_quarter),
         "closed_projects_this_quarter_sra_final": sra_final_closed_count,
         "closed_projects_this_quarter_sra_final_names": sorted(sra_final_closed_names),
         "avg_project_close_days_this_quarter": avg_close_days,
+        "close_day_sample_sum": close_day_sample_sum,
+        "close_day_sample_count": close_day_sample_count,
         "overall_project_status": overall_status,
         "projects_over_red_threshold": projects_over_threshold,
         "status_breakdown": status_breakdown,
@@ -962,22 +998,8 @@ def compute_services_hybrid(config: dict[str, Any], anchor_date: date) -> dict[s
     if clickup_data.get("status") != "ok":
         return admin_data
 
-    closed_admin_names = {
-        str(name).strip().lower()
-        for name in (admin_data.get("closed_projects_this_quarter_names") or [])
-        if str(name).strip()
-    }
-    closed_clickup_sra_names = {
-        str(name).strip().lower()
-        for name in (clickup_data.get("closed_projects_this_quarter_sra_final_names") or [])
-        if str(name).strip()
-    }
-    if closed_admin_names or closed_clickup_sra_names:
-        closed_hybrid = len(closed_admin_names.union(closed_clickup_sra_names))
-    else:
-        closed_admin = int(admin_data.get("closed_projects_this_quarter", 0) or 0)
-        closed_clickup_sra = int(clickup_data.get("closed_projects_this_quarter_sra_final", 0) or 0)
-        closed_hybrid = max(closed_admin, closed_clickup_sra)
+    # Closed projects should be sourced from live ClickUp quarter closures.
+    closed_hybrid = int(clickup_data.get("closed_projects_this_quarter", 0) or 0)
 
     return {
         "status": "ok",
@@ -989,11 +1011,118 @@ def compute_services_hybrid(config: dict[str, Any], anchor_date: date) -> dict[s
         "projects_over_red_threshold": clickup_data.get("projects_over_red_threshold", []),
         "status_breakdown": clickup_data.get("status_breakdown", []),
         "task_count": clickup_data.get("task_count", 0),
+        "closed_projects_this_quarter_sra_final_names": clickup_data.get("closed_projects_this_quarter_sra_final_names", []),
+        "close_day_sample_sum": clickup_data.get("close_day_sample_sum", 0.0),
+        "close_day_sample_count": clickup_data.get("close_day_sample_count", 0),
         # Historical / vetted quarter-close metrics from admin dashboard DB.
         "closed_projects_this_quarter": closed_hybrid,
+        "closed_projects_this_quarter_names": clickup_data.get("closed_projects_this_quarter_names", []),
         "avg_project_close_days_this_quarter": admin_data.get("avg_project_close_days_this_quarter", 0.0),
         "red_item_threshold": clickup_data.get("red_item_threshold"),
     }
+
+
+def _load_services_quarter_override_from_file(quarter_lbl: str) -> dict[str, Any] | None:
+    path = Path("dashboard_services_overrides.json")
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text())
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    row = payload.get(quarter_lbl)
+    return row if isinstance(row, dict) else None
+
+
+def _load_services_quarter_override_from_supabase(quarter_lbl: str) -> dict[str, Any] | None:
+    base_url = str(os.getenv("SUPABASE_URL", "")).strip().rstrip("/")
+    key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")).strip()
+    table = str(os.getenv("SUPABASE_DASHBOARD_SERVICE_OVERRIDES_TABLE", "dashboard_service_overrides")).strip()
+    if not base_url or not key:
+        return None
+    headers = {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+    }
+    params = {
+        "select": "quarter,closed_projects_this_quarter,avg_project_close_days_this_quarter",
+        "quarter": f"eq.{quarter_lbl}",
+        "limit": "1",
+    }
+    resp = requests.get(f"{base_url}/rest/v1/{table}", headers=headers, params=params, timeout=20)
+    resp.raise_for_status()
+    payload = resp.json()
+    if not isinstance(payload, list) or not payload:
+        return None
+    row = payload[0]
+    return row if isinstance(row, dict) else None
+
+
+def apply_services_quarter_override(services_out: dict[str, Any], quarter_lbl: str) -> dict[str, Any]:
+    if not isinstance(services_out, dict) or services_out.get("status") != "ok":
+        return services_out
+
+    override: dict[str, Any] | None = None
+    try:
+        override = _load_services_quarter_override_from_supabase(quarter_lbl)
+    except RequestException:
+        override = None
+    if override is None:
+        override = _load_services_quarter_override_from_file(quarter_lbl)
+    if not isinstance(override, dict):
+        return services_out
+
+    sample_count = int(parse_number(services_out.get("close_day_sample_count", 0)))
+    sample_sum = float(parse_number(services_out.get("close_day_sample_sum", 0.0)))
+
+    # Optional cumulative closed-project seed mode:
+    # closed = seed + distinct Q2 names (status-close names + SRA-final names), with optional exclusions.
+    seed_closed = int(parse_number(override.get("closed_seed_projects_count", 0)))
+    if seed_closed > 0:
+        status_names = {
+            str(name).strip()
+            for name in (services_out.get("closed_projects_this_quarter_names") or [])
+            if str(name).strip()
+        }
+        sra_names = {
+            str(name).strip()
+            for name in (services_out.get("closed_projects_this_quarter_sra_final_names") or [])
+            if str(name).strip()
+        }
+        all_names = status_names.union(sra_names)
+        excluded = {
+            str(name).strip().lower()
+            for name in (override.get("exclude_closed_project_names") or [])
+            if str(name).strip()
+        }
+        if excluded:
+            all_names = {n for n in all_names if n.strip().lower() not in excluded}
+        services_out["closed_projects_this_quarter"] = seed_closed + len(all_names)
+    elif "closed_projects_this_quarter" in override:
+        services_out["closed_projects_this_quarter"] = int(parse_number(override.get("closed_projects_this_quarter")))
+
+    # Seeded average mode:
+    # keep a trusted baseline average and blend in newly closed projects from ClickUp.
+    seeded_count = int(parse_number(override.get("avg_seed_closed_projects_count", 0)))
+    has_seeded_avg = "avg_project_close_days_this_quarter" in override
+    if has_seeded_avg and seeded_count > 0:
+        seeded_avg = float(parse_number(override.get("avg_project_close_days_this_quarter")))
+        total_count = seeded_count + max(sample_count, 0)
+        if total_count > 0:
+            services_out["avg_project_close_days_this_quarter"] = (
+                (seeded_avg * seeded_count) + max(sample_sum, 0.0)
+            ) / total_count
+        else:
+            services_out["avg_project_close_days_this_quarter"] = seeded_avg
+    elif has_seeded_avg:
+        services_out["avg_project_close_days_this_quarter"] = float(
+            parse_number(override.get("avg_project_close_days_this_quarter"))
+        )
+
+    services_out["override_source"] = "supabase_or_file"
+    return services_out
 
 
 def row_date_from_candidates(row: dict[str, Any], date_keys: list[str]) -> date | None:
@@ -1182,6 +1311,7 @@ def compute_quarter_metric_from_reports(
         for m in month_starts:
             if m.strftime("%Y-%m") <= anchor_date.strftime("%Y-%m"):
                 elapsed += 1
+        anchor_month_key = anchor_date.strftime("%Y-%m")
         history_month_vals: dict[str, float] = {}
         if bool(metric_cfg.get("use_history_month_end", False)):
             history_path = Path(str(metric_cfg.get("history_path", "dashboard_history.json"))).expanduser()
@@ -1192,11 +1322,15 @@ def compute_quarter_metric_from_reports(
             )
         series = []
         for i, m in enumerate(month_starts):
+            month_key = m.strftime("%Y-%m")
             if i >= elapsed:
                 value = None
+            elif month_key == anchor_month_key:
+                # Always show live snapshot for the current month.
+                value = snapshot_total
             else:
-                value = history_month_vals.get(m.strftime("%Y-%m"), snapshot_total)
-            series.append({"month": m.strftime("%Y-%m"), "label": month_label(m), "value": value})
+                value = history_month_vals.get(month_key, snapshot_total)
+            series.append({"month": month_key, "label": month_label(m), "value": value})
         output.update(
             {
                 "series": series,
@@ -1204,7 +1338,7 @@ def compute_quarter_metric_from_reports(
                 "qtd_total": snapshot_total,
                 "quarter_start": q_start.isoformat(),
                 "quarter_end_exclusive": q_end.isoformat(),
-                "series_mode": "snapshot",
+                "series_mode": str(metric_cfg.get("series_mode", "snapshot")).strip().lower() or "snapshot",
             }
         )
     elif window_mode == "last_week":
@@ -1384,6 +1518,10 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
                 output["services"] = compute_services_hybrid(config=config, anchor_date=quarter_anchor)
             else:
                 output["services"] = compute_services_from_clickup(config=config, anchor_date=quarter_anchor)
+            output["services"] = apply_services_quarter_override(
+                services_out=output["services"],
+                quarter_lbl=quarter_label(quarter_anchor),
+            )
         except (RequestException, ConfigError) as exc:
             output["services"] = {"status": "error", "message": str(exc)}
 
@@ -1479,6 +1617,27 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
             "source": "services",
         }
 
+    # Optional hardcoded quarter-close overrides for historical correctness.
+    hardcoded = config.get("hardcoded_overrides", {}) if isinstance(config.get("hardcoded_overrides"), dict) else {}
+    anchor_key = quarter_anchor.isoformat()
+    anchor_override = hardcoded.get(anchor_key, {}) if isinstance(hardcoded.get(anchor_key, {}), dict) else {}
+    if anchor_override:
+        for metric_name, raw in anchor_override.items():
+            val = parse_number(raw)
+            if metric_name in output.get("dashboard", {}) and isinstance(output["dashboard"].get(metric_name), dict):
+                output["dashboard"][metric_name] = {"value": val, "source": "hardcoded_override"}
+            else:
+                output.setdefault("dashboard", {})[metric_name] = {"value": val, "source": "hardcoded_override"}
+
+            sf_metric = output.get("salesforce", {}).get(metric_name)
+            if isinstance(sf_metric, dict):
+                sf_metric["value"] = val
+                sf_metric["qtd_total"] = val
+                if isinstance(sf_metric.get("series"), list) and sf_metric["series"]:
+                    sf_metric["series"][-1]["value"] = val
+                if "snapshot_value" in sf_metric:
+                    sf_metric["snapshot_value"] = val
+
     output["meta"] = {
         "workbook": str(workbook_path) if workbook_path else None,
         "summary_sheet": sheet,
@@ -1490,6 +1649,7 @@ def build_metrics(config: dict[str, Any]) -> dict[str, Any]:
 
 def main() -> None:
     load_dotenv(Path(__file__).with_name(".env"))
+    load_dotenv(Path(__file__).with_name(".env.supabase"))
 
     config_path = Path(os.getenv("DASHBOARD_CONFIG_PATH", "dashboard_config.json"))
     if not config_path.exists():

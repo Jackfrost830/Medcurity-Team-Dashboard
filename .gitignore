@@ -9,3 +9,15 @@ dashboard_config.json
 *.xlsx
 Install dependencies
 .vercel
+
+# Local-only secrets and tokens (added pre-departure cleanup)
+.env.*
+.env
+service_account_key.json
+
+# Nested working copies of other repos that ended up inside this folder
+medcurity-client-dashboard-clone/
+medcurity-client-dashboard-1-working/
+
+# Local cron + run scripts (machine-specific paths)
+logs/

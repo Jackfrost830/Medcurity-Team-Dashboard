@@ -780,13 +780,19 @@ def main() -> None:
       }};
     }}
 
-    function pointStatus(value, goalCum, idx) {{
+    function pointStatus(value, goalCum, idx, currentIndex) {{
       if (value === null || value === undefined) return null;
       const v = Number(value || 0);
       const g0 = Number(goalCum?.[0] || 0);
       const g1 = Number(goalCum?.[1] || g0);
       const g2 = Number(goalCum?.[2] || g1);
-      if (idx === 0) return v >= g0 ? 'green' : 'red';
+      if (idx === 0) {{
+        if (v >= g0) return 'green';
+        // Month 1 stays yellow while it is still the current month.
+        if ((Number(currentIndex) || 0) === 0) return 'yellow';
+        // Once month 2 has started, month 1 missed target becomes red.
+        return 'red';
+      }}
       if (idx === 1) {{
         if (v >= g1) return 'green';
         if (v >= g0) return 'yellow';
@@ -934,7 +940,7 @@ def main() -> None:
       const actual = transformedActualSeries(metricKey, rows, sfMetric, currentYm);
       const mode = String(sfMetric?.series_mode || '');
       const goals = monthlyGoals(metricKey, mode).cumulative;
-      const statuses = actual.map((v, i) => pointStatus(v, goals, i));
+      const statuses = actual.map((v, i) => pointStatus(v, goals, i, currentIndex));
       const ui = chartUi();
       const colorByStatus = (s) => s === 'green' ? ui.green : (s === 'yellow' ? ui.yellow : (s === 'red' ? ui.red : ui.clear));
       const isPipeline = metricKey === 'total_active_pipeline';
@@ -1089,7 +1095,7 @@ def main() -> None:
         ).quarter_goal || 0
       );
       const goalSeries = labels.map(() => goalValue);
-      const statuses = values.map((v, i) => pointStatus(v, goalSeries, i));
+      const statuses = values.map((v, i) => pointStatus(v, goalSeries, i, currentIndex));
       const colorByStatus = (s) => s === 'green' ? ui.green : (s === 'yellow' ? ui.yellow : (s === 'red' ? ui.red : ui.clear));
       new Chart(document.getElementById(canvasId), {{
         type: 'line',

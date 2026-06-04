@@ -1,5 +1,9 @@
 # Medcurity Dashboard Handoff
 
+## Canonical Agent Handoff
+- For Claude Code or any new coding agent, start with `CLAUDE_CODE_HANDOFF.md`.
+- This file remains the architecture/runbook contract; `CLAUDE_CODE_HANDOFF.md` is the operational map + improvement backlog.
+
 ## Scope
 This repo powers the Medcurity dashboard stack:
 - `dashboard_preview.html` (owner/admin view)
@@ -125,3 +129,55 @@ This is mandatory so a different agent (including Claude Code) can resume work w
   - `Print HQ PDF`
   - `Goals Admin` (owner/admin view)
 - `Download HD PNG` was intentionally removed from generated output.
+- Runtime resilience improvement:
+  - If Supabase history read fails, app now falls back to local `dashboard_history.json` so admin/team pages do not 500.
+- Production deploy completed:
+  - `https://medcurity-team-dashboard-site.vercel.app`
+  - `/goals_admin` and `/dashboard_team_view` verified `200`.
+
+## Services avg close days behavior (Q2)
+
+- QTD close-days average now supports seeded baseline blending:
+  - Seed value and seed count come from quarter override (file/supabase).
+  - New quarter closures from ClickUp are blended into that baseline.
+- Current seed configured:
+  - `Q2-2026` seeded at `52` days with seed count `8`.
+- Intended outcome:
+  - Starts at 52 at quarter open.
+  - Moves naturally as additional projects close in Q2.
+
+## MQL behavior (Q2)
+
+- MQL is now aligned to current Q2 window (April 1, 2026 to June 30, 2026) without forced `CREATED_DATE` override.
+- Current verified values on 2026-04-06:
+  - report `00O5w000009F5BNEA0` = 11
+  - report `00O5w000009E9WWEA0` = 28
+  - dashboard total = 39
+
+## Goal color logic (month progression)
+
+- Month 1 rule now:
+  - Yellow while month 1 is current and below month-1 goal.
+  - Green once month-1 goal is hit.
+  - Red only after month 2 starts if month-1 goal was missed.
+- Month 2 and month 3 remain:
+  - Yellow when above prior month goal but below current month goal.
+  - Green at/above current month goal.
+  - Red when below threshold.
+
+## Closed projects (services) - Q2 behavior
+
+- Closed-project count now tracks ClickUp quarter closures and applies seeded cumulative logic for dashboard continuity.
+- Q2 override seed configured:
+  - `closed_seed_projects_count = 8`
+  - `exclude_closed_project_names` includes Flourish Collective variants.
+- Current expected live value:
+  - `closed_projects_this_quarter = 12`
+
+## NRR chart range
+
+- Current dashboard NRR history is intentionally trimmed to a rolling 5 visible quarter points.
+- Result:
+  - `Q1-2025` dropped from current view.
+  - `Q2-2025` .. `Q2-2026` shown.
+- Historical snapshot integrity remains retained.

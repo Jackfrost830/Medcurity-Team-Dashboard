@@ -1,5 +1,15 @@
 # Dashboard Change Log
 
+## 2026-04-27 - Claude migration handoff package
+
+- Added `CLAUDE_CODE_HANDOFF.md` with:
+  - full source map
+  - architecture/data flow
+  - Supabase + routing contracts
+  - snapshot behavior contract
+  - prioritized improvement roadmap for next iterations
+- Updated `DASHBOARD_HANDOFF.md` to explicitly point new agents to `CLAUDE_CODE_HANDOFF.md` first.
+
 ## 2026-04-01
 
 ### Historical snapshot stability
@@ -88,3 +98,88 @@
 - Removed the `Download HD PNG` action from dashboard UI actions.
 - Kept `Print HQ PDF` intact for one-page export workflow.
 - Regenerated dashboard outputs (`dashboard_preview.html`, `dashboard_team_view.html`, `index.html`) and synced `public/` copies.
+
+## 2026-04-02 - Admin 500 fallback + live deploy
+
+- Fixed admin/runtime hard-fail path when Supabase history load errors.
+  - `dashboard_runtime.py` now falls back to local `dashboard_history.json` on history backend read exceptions instead of returning HTTP 500.
+- Deployed directly to production via Vercel CLI:
+  - Deployment ID: `dpl_GxWErKhxYLv9GNgcidLePREB9Vp4`
+  - Production alias: `https://medcurity-team-dashboard-site.vercel.app`
+- Verified live endpoints respond:
+  - `/goals_admin` -> `200`
+  - `/dashboard_team_view` -> `200`
+
+## 2026-04-02 - Services avg close days seeded baseline
+
+- Updated services metric logic so QTD avg close days can start from a trusted seed value and adjust as new closures occur.
+  - `dashboard_metrics.py`
+    - Added `close_day_sample_sum` and `close_day_sample_count` from ClickUp quarter-close samples.
+    - Propagated these through hybrid services output.
+    - Enhanced `apply_services_quarter_override()` to support seeded average blending:
+      - `avg_project_close_days_this_quarter` + `avg_seed_closed_projects_count`.
+- Added Q2 seed in `dashboard_services_overrides.json`:
+  - `Q2-2026.avg_project_close_days_this_quarter = 52`
+  - `Q2-2026.avg_seed_closed_projects_count = 8`
+- Deployed to production:
+  - Deployment ID: `dpl_3f4Kti47unv6QCjcZPMzSt4bW8L6`
+  - Alias: `https://medcurity-team-dashboard-site.vercel.app`
+- Live verification:
+  - `data.services.avg_project_close_days_this_quarter = 52.0`
+  - `data.services.override_source = supabase_or_file`
+
+## 2026-04-06 - MQL Q2 date-window alignment
+
+- Updated MQL config to disable Salesforce standard date override for this metric:
+  - `dashboard_config.json` -> `salesforce_quarter_metrics.mql.use_standard_date_override = false`
+  - `dashboard_config.template.json` updated to match.
+- Deployed to production:
+  - Deployment ID: `dpl_7a3K2uaQLNDKx3zX9sztHT8FwYZ4`
+  - Alias: `https://medcurity-team-dashboard-site.vercel.app`
+- Post-deploy verification (2026-04-06, Q2 window Apr 1-Jun 30):
+  - MQL now computed as 39 based on current report rows:
+    - `00O5w000009F5BNEA0` = 11
+    - `00O5w000009E9WWEA0` = 28
+
+## 2026-04-06 - Month 1 goal color rule update
+
+- Updated goal status coloring logic for month 1 in chart rendering:
+  - Month 1 is `yellow` while month 1 is current and below month-1 goal.
+  - Month 1 turns `green` when month-1 goal is hit/exceeded.
+  - Month 1 turns `red` only after month 2 starts if month-1 goal was missed.
+- Month 2 and month 3 behavior left as-is:
+  - `yellow` when prior month goal is surpassed but current month goal not yet hit.
+  - `green` when current month goal is hit/exceeded.
+  - `red` when below required threshold.
+- Files updated:
+  - `generate_dashboard_preview.py` (source logic)
+  - regenerated HTML outputs and synced `public/`.
+- Deployed to production:
+  - Deployment ID: `dpl_5AZAFYRiX3UsBYyeaqsXQWJn6vxD`
+
+## 2026-04-20 - ClickUp closed-project tracking fix
+
+- Fixed services hybrid closed-project logic to track live ClickUp quarter closures directly.
+  - `dashboard_metrics.py`
+    - `compute_services_from_clickup()` now returns `closed_projects_this_quarter_names`.
+    - `compute_services_hybrid()` now uses ClickUp quarter closed count as canonical and passes through name lists.
+    - `apply_services_quarter_override()` now supports seeded cumulative close count:
+      - `closed_seed_projects_count`
+      - `exclude_closed_project_names`
+- Updated `dashboard_services_overrides.json` for `Q2-2026`:
+  - `closed_seed_projects_count: 8`
+  - `exclude_closed_project_names`: includes Flourish Collective variants.
+- Deployed to production:
+  - Deployment ID: `dpl_Cfy5sw55uJkwzXkBAh4KTsvu3qEX`
+  - Alias: `https://medcurity-team-dashboard-site.vercel.app`
+- Verified live:
+  - `closed_projects_this_quarter = 12`
+
+## 2026-04-20 - NRR visible range trim
+
+- Adjusted current dashboard NRR visible history window to 5 points, dropping oldest visible point (`Q1-2025`) while keeping historical snapshots retained.
+- `dashboard_runtime.py`:
+  - `nrr_customer_history` and `nrr_dollar_history` now use `max_points=5` in current runtime payload.
+- Deployed to production:
+  - Deployment ID: `dpl_7n5TnE1GJn6jgf3XgLGYz97UgxGs`
+- Verified live arrays now start at `Q2-2025` and include `Q1-2026`, `Q2-2026`.

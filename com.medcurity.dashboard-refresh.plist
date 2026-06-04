@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.medcurity.dashboard-refresh</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/bin/zsh</string>
+      <string>-lc</string>
+      <string>set -a &amp;&amp; source "$HOME/.medcurity_dashboard.env" &amp;&amp; set +a &amp;&amp; python3 "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/dashboard_metrics.py" &amp;&amp; python3 "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/generate_dashboard_preview.py" &amp;&amp; cp "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/dashboard_preview.html" "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/public/dashboard_preview.html" &amp;&amp; cp "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/dashboard_team_view.html" "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/public/dashboard_team_view.html" &amp;&amp; cp "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/goals_admin.html" "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/public/goals_admin.html" &amp;&amp; cp "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/index.html" "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/public/index.html" &amp;&amp; cp "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/dashboard_metrics_output.json" "/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/public/dashboard_metrics_output.json"</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+      <key>Hour</key>
+      <integer>6</integer>
+      <key>Minute</key>
+      <integer>30</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/logs/dashboard_refresh.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/braydenfrost/Library/CloudStorage/OneDrive-Medcurity,Inc/Code/Python Projects/Salesforce Pull/logs/dashboard_refresh.err.log</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+  </dict>
+</plist>
